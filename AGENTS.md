@@ -18,12 +18,19 @@ This repo has agent skills installed under `.agents/skills/` (installed via `npx
 | `imagegen-frontend-web`, `imagegen-frontend-mobile` | Generating imagery/assets for the web or mobile demo surfaces. |
 | `redesign-existing-projects` | Revisiting/improving UI once a first pass already exists — not for greenfield work. |
 | `full-output-enforcement` | Ensure generated code/content isn't silently truncated — apply when producing large files. |
-| `ponytail`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-review`, `ponytail-help` | Code quality/tech-debt review loop — see each skill's own SKILL.md for when to invoke which. |
+| `ponytail` | **Active on every coding response by default.** Forces the simplest solution that works (YAGNI, stdlib/native before deps, shortest diff) — see "Ponytail vs. ARCHITECTURE.md" below for how this interacts with the DTO/layering rules. |
+| `ponytail-review` | Diff-scoped review that only hunts over-engineering (reinvented stdlib, unneeded deps, speculative abstractions) — run before committing non-trivial changes. |
+| `ponytail-audit` | Whole-repo sweep for bloat/over-engineering — run periodically, not per-commit; one-shot report, doesn't apply fixes. |
+| `ponytail-debt` | Collects every `ponytail:` comment (deliberate shortcuts) into a debt ledger — run before Stage 1 submission to make sure known corners cut are visible, not forgotten. |
+| `ponytail-gain`, `ponytail-help` | Scoreboard / quick-reference — informational only. |
 | `ui-ux-pro-max` | Searchable design-rules database (styles, palettes, fonts, UX guidelines, motion, charts) across 22 stacks — use for concrete design-system decisions (colors, typography, layout) instead of guessing. ⚠️ Flagged High Risk by the Gen scanner on install; manual review of its bundled scripts found no network calls, subprocess/eval/exec, or obfuscation — looks like a generic "bundles executable code" heuristic, but treat with normal caution when running its `search.py`. |
 | `banner-design`, `brand`, `design`, `design-system`, `ui-styling` | Supporting design skills from the same pack — narrower scope than `ui-ux-pro-max`, use when the task matches the name directly. |
 | `slides` | Presentation/pitch-deck structure and copywriting — use when building the hackathon pitch deck. ⚠️ Flagged Med Risk by Gen/Snyk on install; it's plain markdown reference content with no executable code, so this looks like a scanner false positive, but noted here for visibility. |
 
 Check each skill's own instructions (under `.agents/skills/<name>/`) for specifics before invoking.
+
+### Ponytail vs. `docs/ARCHITECTURE.md` — not a conflict
+Ponytail forbids *unrequested* abstraction ("no interface with one implementation," "no unneeded layering"). The DTO/layering split in `docs/ARCHITECTURE.md` is a **deliberate, explicitly-requested** architectural decision for this project — specifically because the public/private data boundary is the product's core safety property, not incidental structure. Ponytail should keep everything else (helper functions, error handling, script structure, dependency choices) as minimal as possible, but the layer boundary and the two distinct transaction DTOs stay non-negotiable regardless of ponytail's intensity level.
 
 ## Hard rules (see docs/ARCHITECTURE.md for full detail)
 1. Data layer, service/business-logic layer, and presentation layer stay separate — no Solana RPC or decryption calls inside UI components, no business rules inside data-fetching code.
