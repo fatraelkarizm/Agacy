@@ -10,6 +10,8 @@ import {
   signTransactionMessageWithSigners,
   type Address,
   type KeyPairSigner,
+  some,
+  none,
 } from "@solana/kit";
 import { getCreateAccountInstruction } from "@solana-program/system";
 import {
@@ -62,7 +64,20 @@ export async function createConfidentialMint(
   config: ConfidentialMintConfig,
 ): Promise<CreatedMint> {
   const mintSigner = await generateKeyPairSigner();
-  const space = BigInt(getMintSize([{ __kind: "ConfidentialTransferMint" } as never]));
+  const auditor = config.auditorElGamalPubkey ? some(config.auditorElGamalPubkey) : none<Address>();
+
+  // getMintSize encodes the extension to measure it, so every field has to be
+  // present here — a partial object fails inside the codec, not with a type error.
+  const space = BigInt(
+    getMintSize([
+      {
+        __kind: "ConfidentialTransferMint",
+        authority: some(config.authority),
+        autoApproveNewAccounts: config.autoApproveNewAccounts,
+        auditorElgamalPubkey: auditor,
+      },
+    ]),
+  );
   const rent = await client.rpc.getMinimumBalanceForRentExemption(space).send();
 
   const instructions = [
@@ -77,7 +92,7 @@ export async function createConfidentialMint(
       mint: mintSigner.address,
       authority: config.authority,
       autoApproveNewAccounts: config.autoApproveNewAccounts,
-      auditorElgamalPubkey: config.auditorElGamalPubkey ?? null,
+      auditorElgamalPubkey: auditor,
     }),
     getInitializeMint2Instruction({
       mint: mintSigner.address,
@@ -91,8 +106,43 @@ export async function createConfidentialMint(
   return { mint: mintSigner.address, signature };
 }
 
-/** Shared transaction plumbing: build, sign, send, confirm. */
+/**
+ * Shared transaction plumbing: build, sign, send, confirm.
+ *
+ * A confidential transfer needs several transactions back to back (three proof
+ * verifications, the transfer, then cleanup), which trips the public devnet
+ * RPC's rate limiter. Retrying on 429 keeps a correct flow from looking like a
+ * failure just because it was too fast for a free endpoint.
+ */
 export async function sendInstructions(
+  client: SolanaClient,
+  payer: KeyPairSigner,
+  instructions: readonly unknown[],
+  attempts = 5,
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await sendOnce(client, payer, instructions);
+    } catch (error) {
+      lastError = error;
+      // Only a rate-limited *send* is safe to retry. Anything else may have
+      // already landed on-chain, and re-sending it would fail confusingly
+      // (e.g. "account already initialized") while hiding the real error.
+      if (!isRateLimited(error) || attempt === attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 1_500 * attempt));
+    }
+  }
+
+  throw lastError;
+}
+
+function isRateLimited(error: unknown): boolean {
+  return String((error as Error)?.message ?? error).includes("429");
+}
+
+async function sendOnce(
   client: SolanaClient,
   payer: KeyPairSigner,
   instructions: readonly unknown[],

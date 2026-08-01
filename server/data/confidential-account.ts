@@ -9,6 +9,7 @@ import {
   getInitializeAccount3Instruction,
   getConfigureConfidentialTransferAccountInstruction,
   getTokenSize,
+  type ExtensionArgs,
 } from "@solana-program/token-2022";
 import { PubkeyValidityProofData } from "@solana/zk-sdk/node";
 import { verifyPubkeyValidity } from "@solana-program/zk-elgamal-proof";
@@ -30,6 +31,33 @@ import type { ConfidentialKeys } from "./confidential-keys.js";
 /** Instruction offset is relative: +1 means "the next instruction in this transaction". */
 const PROOF_INSTRUCTION_OFFSET = 1;
 
+/**
+ * `getTokenSize` measures an extension by encoding it, so it needs a fully
+ * populated object even when we only want the byte count. The values below are
+ * placeholders — the extension's size is fixed, so none of them affect the
+ * result. Kept in one place so the real account-creation path stays readable.
+ */
+function confidentialAccountSizingTemplate(): ExtensionArgs {
+  const zeros = (length: number) => new Uint8Array(length);
+  const PLACEHOLDER_KEY = "11111111111111111111111111111111" as Address;
+
+  return {
+    __kind: "ConfidentialTransferAccount",
+    approved: true,
+    elgamalPubkey: PLACEHOLDER_KEY,
+    pendingBalanceLow: zeros(64) as never,
+    pendingBalanceHigh: zeros(64) as never,
+    availableBalance: zeros(64) as never,
+    decryptableAvailableBalance: zeros(36) as never,
+    allowConfidentialCredits: true,
+    allowNonConfidentialCredits: true,
+    pendingBalanceCreditCounter: 0n,
+    maximumPendingBalanceCreditCounter: 0n,
+    expectedPendingBalanceCreditCounter: 0n,
+    actualPendingBalanceCreditCounter: 0n,
+  };
+}
+
 /** How many pending incoming transfers can accumulate before the owner must apply them. */
 const DEFAULT_MAX_PENDING_CREDITS = 65_536n;
 
@@ -46,7 +74,7 @@ export async function createConfidentialTokenAccount(
   keys: ConfidentialKeys,
 ): Promise<ConfidentialAccountSetup> {
   const tokenSigner = await generateKeyPairSigner();
-  const space = BigInt(getTokenSize([{ __kind: "ConfidentialTransferAccount" } as never]));
+  const space = BigInt(getTokenSize([confidentialAccountSizingTemplate()]));
   const rent = await client.rpc.getMinimumBalanceForRentExemption(space).send();
 
   // A freshly configured account holds zero, but the program still needs that

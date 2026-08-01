@@ -16,16 +16,25 @@ import { createConfidentialMint } from "@data/confidential-mint";
 
 const client = createDevnetClient();
 const ONE_SOL = 1_000_000_000n;
+/** Enough to cover rent for a mint plus fees. */
+const MIN_BALANCE = 100_000_000n;
 
 describe("confidential mint on devnet", () => {
   let payer: KeyPairSigner;
 
   beforeAll(async () => {
     payer = await loadOrCreatePayer();
-    await fundFromFaucet(client, payer.address, ONE_SOL);
-    const balance = await getLamportBalance(client, payer.address);
-    if (balance === 0n) {
-      throw new Error("Faucet funding did not land; devnet faucet may be rate-limited.");
+    // Prefer an already-funded local keypair; the public faucet is only a
+    // fallback because it rate-limits hard enough to make runs flaky.
+    let balance = await getLamportBalance(client, payer.address);
+    if (balance < MIN_BALANCE) {
+      await fundFromFaucet(client, payer.address, ONE_SOL);
+      balance = await getLamportBalance(client, payer.address);
+    }
+    if (balance < MIN_BALANCE) {
+      throw new Error(
+        `Payer ${payer.address} has ${balance} lamports. Fund it at https://faucet.solana.com (devnet).`,
+      );
     }
   });
 

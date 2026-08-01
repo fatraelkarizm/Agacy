@@ -1,4 +1,4 @@
-import type { Address, KeyPairSigner } from "@solana/kit";
+import { generateKeyPairSigner, type Address, type KeyPairSigner } from "@solana/kit";
 import {
   getApplyConfidentialPendingBalanceInstruction,
   getConfidentialDepositInstruction,
@@ -10,6 +10,7 @@ import {
   verifyBatchedGroupedCiphertext3HandlesValidity,
   verifyBatchedRangeProofU128,
   verifyCiphertextCommitmentEquality,
+  closeContextStateProof,
 } from "@solana-program/zk-elgamal-proof";
 import type { SolanaClient } from "./solana-client.js";
 import { sendInstructions } from "./confidential-mint.js";
@@ -34,6 +35,29 @@ import { extractHandleCiphertext } from "./elgamal-arithmetic.js";
 
 /** Handle order inside a 3-handle grouped ciphertext. */
 const AUDITOR_HANDLE_INDEX = 2;
+
+/** Spacing between sequential transactions, to stay under the public RPC rate limit. */
+const pause = () => new Promise((resolve) => setTimeout(resolve, 1_200));
+
+/**
+ * Send a proof's setup instructions and its verification in separate
+ * transactions. The verify instruction carries the full proof bytes, so it has
+ * to travel alone to stay under the transaction size limit.
+ */
+async function sendProofInstructionsSeparately(
+  client: SolanaClient,
+  payer: KeyPairSigner,
+  instructions: readonly unknown[],
+): Promise<void> {
+  const setup = instructions.slice(0, -1);
+  const verify = instructions.slice(-1);
+
+  if (setup.length > 0) {
+    await sendInstructions(client, payer, setup);
+    await pause();
+  }
+  await sendInstructions(client, payer, verify);
+}
 
 export interface DepositParams {
   readonly tokenAccount: Address;
@@ -140,29 +164,61 @@ export async function executeConfidentialTransfer(
     availableBalanceCiphertext: params.availableBalanceCiphertext,
   });
 
-  const [equalityIxs, validityIxs, rangeIxs] = await Promise.all([
-    verifyCiphertextCommitmentEquality({
-      rpc: client.rpc,
-      payer,
-      proofData: proofs.equality.toBytes(),
-    }),
-    verifyBatchedGroupedCiphertext3HandlesValidity({
-      rpc: client.rpc,
-      payer,
-      proofData: proofs.ciphertextValidity.toBytes(),
-    }),
-    verifyBatchedRangeProofU128({
-      rpc: client.rpc,
-      payer,
-      proofData: proofs.range.toBytes(),
-    }),
-  ]);
+  // The three proofs together are ~3KB, well past Solana's 1232-byte
+  // transaction limit, so they cannot be inlined alongside the transfer.
+  // Instead each proof is verified into its own context state account first;
+  // the transfer then references those accounts and stays small. The rent is
+  // reclaimed by closing the context accounts once the transfer lands.
+  const equalityContext = await generateKeyPairSigner();
+  const validityContext = await generateKeyPairSigner();
+  const rangeContext = await generateKeyPairSigner();
 
+  const contextAuthority = payer.address;
+
+  const equalityIxs = await verifyCiphertextCommitmentEquality({
+    rpc: client.rpc,
+    payer,
+    proofData: proofs.equality.toBytes(),
+    contextState: { contextAccount: equalityContext, authority: contextAuthority },
+  });
+  const validityIxs = await verifyBatchedGroupedCiphertext3HandlesValidity({
+    rpc: client.rpc,
+    payer,
+    proofData: proofs.ciphertextValidity.toBytes(),
+    contextState: { contextAccount: validityContext, authority: contextAuthority },
+  });
+  const rangeIxs = await verifyBatchedRangeProofU128({
+    rpc: client.rpc,
+    payer,
+    proofData: proofs.range.toBytes(),
+    contextState: { contextAccount: rangeContext, authority: contextAuthority },
+  });
+
+  // Each proof gets its own transaction. Equality (~321 bytes) and validity fit
+  // alongside their context-account creation; the U128 range proof does not, so
+  // its creation and verification are split across two transactions.
+  //
+  // These are paced deliberately: the public devnet RPC rate-limits a burst of
+  // transactions, and a 429 mid-flow is genuinely ambiguous — the transaction
+  // may or may not have landed — so it is better to avoid tripping it than to
+  // retry into an "already initialized" error.
+  await sendInstructions(client, payer, equalityIxs);
+  await pause();
+  await sendInstructions(client, payer, validityIxs);
+  await pause();
+  await sendProofInstructionsSeparately(client, payer, rangeIxs);
+  await pause();
+
+  // Offset 0 tells the program to read the proof from the context state
+  // account passed in the corresponding slot, rather than from an instruction.
   const transferIx = getConfidentialTransferInstruction({
     sourceToken: params.sourceToken,
     mint: params.mint,
     destinationToken: params.destinationToken,
     authority: params.owner,
+    equalityRecord: equalityContext.address,
+    ciphertextValidityRecord: validityContext.address,
+    rangeRecord: rangeContext.address,
     newSourceDecryptableAvailableBalance: params.senderKeys.ae
       .encrypt(proofs.remainingBalance)
       .toBytes() as never,
@@ -174,16 +230,31 @@ export async function executeConfidentialTransfer(
       proofs.groupedHi.toBytes(),
       AUDITOR_HANDLE_INDEX,
     ).toBytes() as never,
-    equalityProofInstructionOffset: 1,
-    ciphertextValidityProofInstructionOffset: 2,
-    rangeProofInstructionOffset: 3,
+    equalityProofInstructionOffset: 0,
+    ciphertextValidityProofInstructionOffset: 0,
+    rangeProofInstructionOffset: 0,
   });
 
-  const signature = await sendInstructions(client, payer, [
-    transferIx,
-    ...equalityIxs,
-    ...validityIxs,
-    ...rangeIxs,
+  const signature = await sendInstructions(client, payer, [transferIx]);
+
+  // Reclaim the rent now that the proofs have served their purpose.
+
+  await sendInstructions(client, payer, [
+    closeContextStateProof({
+      contextState: equalityContext.address,
+      authority: payer,
+      destination: payer.address,
+    }),
+    closeContextStateProof({
+      contextState: validityContext.address,
+      authority: payer,
+      destination: payer.address,
+    }),
+    closeContextStateProof({
+      contextState: rangeContext.address,
+      authority: payer,
+      destination: payer.address,
+    }),
   ]);
 
   return { signature, remainingBalance: proofs.remainingBalance };

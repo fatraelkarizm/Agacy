@@ -9,6 +9,9 @@ import {
   type SolanaRpcSubscriptionsApi,
   type KeyPairSigner,
 } from "@solana/kit";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 
 /**
  * Thin RPC wiring. Everything here is transport concern only — no business
@@ -80,19 +83,32 @@ export async function fundFromFaucet(
 }
 
 /**
- * Load a payer from AGACY_PAYER_SECRET_KEY (JSON array of bytes) when set,
- * otherwise generate a fresh one. Lets integration runs reuse a pre-funded
- * account instead of depending on the faucet every time.
+ * Resolve a funded payer, in order of preference:
+ *   1. AGACY_PAYER_SECRET_KEY (JSON byte array)
+ *   2. the Solana CLI's default keypair at ~/.config/solana/id.json
+ *   3. a fresh keypair (which will need faucet funding)
+ *
+ * The CLI keypair fallback exists because the public devnet faucet rate-limits
+ * aggressively; reusing an already-funded local keypair avoids depending on it.
  */
 export async function loadOrCreatePayer(): Promise<KeyPairSigner> {
-  const raw = process.env["AGACY_PAYER_SECRET_KEY"];
-  if (!raw) return generateKeyPairSigner();
+  const fromEnv = process.env["AGACY_PAYER_SECRET_KEY"];
+  if (fromEnv) return signerFromJsonBytes(fromEnv, "AGACY_PAYER_SECRET_KEY");
 
+  const cliKeypairPath = join(homedir(), ".config", "solana", "id.json");
+  if (existsSync(cliKeypairPath)) {
+    return signerFromJsonBytes(readFileSync(cliKeypairPath, "utf8"), cliKeypairPath);
+  }
+
+  return generateKeyPairSigner();
+}
+
+async function signerFromJsonBytes(raw: string, source: string): Promise<KeyPairSigner> {
   let bytes: number[];
   try {
     bytes = JSON.parse(raw) as number[];
   } catch (cause) {
-    throw new Error("AGACY_PAYER_SECRET_KEY must be a JSON array of bytes", { cause });
+    throw new Error(`${source} must contain a JSON array of secret key bytes`, { cause });
   }
   return createKeyPairSignerFromBytes(new Uint8Array(bytes));
 }
