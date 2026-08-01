@@ -8,3 +8,5 @@ target/
 .agents/
 .claude/
 skills-lock.json
+.codex/
+graphify-out/
