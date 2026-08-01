@@ -18,6 +18,10 @@ This repo has agent skills installed under `.agents/skills/` (installed via `npx
 | `imagegen-frontend-web`, `imagegen-frontend-mobile` | Generating imagery/assets for the web or mobile demo surfaces. |
 | `redesign-existing-projects` | Revisiting/improving UI once a first pass already exists — not for greenfield work. |
 | `full-output-enforcement` | Ensure generated code/content isn't silently truncated — apply when producing large files. |
+| `ponytail`, `ponytail-audit`, `ponytail-debt`, `ponytail-gain`, `ponytail-review`, `ponytail-help` | Code quality/tech-debt review loop — see each skill's own SKILL.md for when to invoke which. |
+| `ui-ux-pro-max` | Searchable design-rules database (styles, palettes, fonts, UX guidelines, motion, charts) across 22 stacks — use for concrete design-system decisions (colors, typography, layout) instead of guessing. ⚠️ Flagged High Risk by the Gen scanner on install; manual review of its bundled scripts found no network calls, subprocess/eval/exec, or obfuscation — looks like a generic "bundles executable code" heuristic, but treat with normal caution when running its `search.py`. |
+| `banner-design`, `brand`, `design`, `design-system`, `ui-styling` | Supporting design skills from the same pack — narrower scope than `ui-ux-pro-max`, use when the task matches the name directly. |
+| `slides` | Presentation/pitch-deck structure and copywriting — use when building the hackathon pitch deck. ⚠️ Flagged Med Risk by Gen/Snyk on install; it's plain markdown reference content with no executable code, so this looks like a scanner false positive, but noted here for visibility. |
 
 Check each skill's own instructions (under `.agents/skills/<name>/`) for specifics before invoking.
 
