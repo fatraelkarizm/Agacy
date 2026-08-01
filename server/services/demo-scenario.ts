@@ -1,0 +1,141 @@
+import type { AuthorizedTransactionDTO, PublicTransactionDTO } from "../dto/transaction.dto";
+import { toPublicView } from "../dto/transaction.dto";
+
+/**
+ * Scenario data for the side-by-side demo.
+ *
+ * Kept in the service layer rather than inside a component so the comparison is
+ * driven by the same DTO boundary the real product uses: the "public" column is
+ * literally produced by `toPublicView`, not hand-written to look redacted.
+ */
+
+export interface ExposedTransactionDTO {
+  readonly signature: string;
+  readonly timestamp: number;
+  readonly status: "confirmed";
+  /** Visible to anyone with a block explorer — this is the point being made. */
+  readonly amount: bigint;
+  readonly counterparty: string;
+  readonly resultingBalance: bigint;
+}
+
+export interface ScenarioStep {
+  readonly label: string;
+  readonly reasoning: string;
+  readonly amount: bigint;
+  readonly counterparty: string;
+}
+
+/** A week in the life of an agent managing a stablecoin budget. */
+export const SCENARIO: readonly ScenarioStep[] = [
+  {
+    label: "Subscription renewal",
+    reasoning: "Monthly API subscription came due; renewed at the standard rate.",
+    amount: 4_200_000n,
+    counterparty: "Sub1er4kQmVnH8dGpXwYzR3tNc5bVfJ2sLmQ9pDhK",
+  },
+  {
+    label: "Compute top-up",
+    reasoning: "Inference credits were running low; bought a top-up before the queue stalled.",
+    amount: 12_500_000n,
+    counterparty: "Cmp7yTn2WxLqE9vRb4sKfJ6hGpZa3MdUc8NrVwXt",
+  },
+  {
+    label: "Data purchase",
+    reasoning: "Bought the market dataset the weekly report depends on.",
+    amount: 31_750_000n,
+    counterparty: "Dta9mKpR5nZwQ2eXcVb7yLsHfG4jTaU6dNrMwPkB",
+  },
+];
+
+const STARTING_BALANCE = 250_000_000n;
+
+export interface ScenarioResult {
+  readonly exposed: readonly ExposedTransactionDTO[];
+  readonly publicView: readonly PublicTransactionDTO[];
+  readonly authorized: readonly AuthorizedTransactionDTO[];
+}
+
+/**
+ * Run the scenario twice over identical activity: once on ordinary public
+ * rails, once through Agacy. The transactions are the same; only what an
+ * observer can read differs.
+ */
+export function runScenario(steps: readonly ScenarioStep[] = SCENARIO): ScenarioResult {
+  const exposed: ExposedTransactionDTO[] = [];
+  const authorized: AuthorizedTransactionDTO[] = [];
+
+  let balance = STARTING_BALANCE;
+  let timestamp = Date.UTC(2026, 7, 2, 9, 15);
+
+  for (const [index, step] of steps.entries()) {
+    balance -= step.amount;
+    timestamp += 86_400_000;
+
+    exposed.push({
+      signature: fakeSignature(index, "public"),
+      timestamp,
+      status: "confirmed",
+      amount: step.amount,
+      counterparty: step.counterparty,
+      resultingBalance: balance,
+    });
+
+    authorized.push({
+      signature: fakeSignature(index, "confidential"),
+      timestamp,
+      status: "confirmed",
+      confidential: true,
+      amount: step.amount,
+      counterparty: step.counterparty,
+      resultingBalance: balance,
+      agentReasoning: step.reasoning,
+    });
+  }
+
+  return {
+    exposed,
+    // The public column is derived through the real DTO boundary, so it cannot
+    // show a field the production public view would not have.
+    publicView: authorized.map(toPublicView),
+    authorized,
+  };
+}
+
+/**
+ * Deterministic placeholder signatures. Real ones come from devnet; these keep
+ * the demo stable and reproducible when running without a chain connection.
+ */
+function fakeSignature(index: number, kind: string): string {
+  const seed = `${kind}${index}`;
+  let hash = 0;
+  for (const char of seed) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+
+  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+  let out = "";
+  let value = hash;
+  for (let i = 0; i < 44; i++) {
+    value = (value * 1_103_515_245 + 12_345) >>> 0;
+    out += alphabet[value % alphabet.length];
+  }
+  return out;
+}
+
+/** Render a ciphertext-looking blob for a value, for display only. */
+export function ciphertextPreview(amount: bigint, salt: number): string {
+  const hexAlphabet = "0123456789abcdef";
+  let value = Number(amount % 1_000_000n) + salt * 7919;
+  let out = "";
+  for (let i = 0; i < 64; i++) {
+    value = (value * 1_664_525 + 1_013_904_223) >>> 0;
+    out += hexAlphabet[value % 16];
+  }
+  return out;
+}
+
+export function formatTokens(baseUnits: bigint, decimals = 6): string {
+  const divisor = 10n ** BigInt(decimals);
+  const whole = baseUnits / divisor;
+  const fraction = (baseUnits % divisor).toString().padStart(decimals, "0").slice(0, 2);
+  return `${whole.toLocaleString("en-US")}.${fraction}`;
+}

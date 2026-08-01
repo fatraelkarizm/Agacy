@@ -3,20 +3,51 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": ["ES2022", "DOM"],
+    "lib": [
+      "ES2022",
+      "DOM"
+    ],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "noEmit": true,
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "paths": {
-      "@dto/*": ["./server/dto/*"],
-      "@data/*": ["./server/data/*"],
-      "@services/*": ["./server/services/*"],
-      "@agent/*": ["./agent/*"]
-    }
+      "@dto/*": [
+        "./server/dto/*"
+      ],
+      "@data/*": [
+        "./server/data/*"
+      ],
+      "@services/*": [
+        "./server/services/*"
+      ],
+      "@agent/*": [
+        "./agent/*"
+      ]
+    },
+    "allowJs": true,
+    "incremental": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ]
   },
-  "include": ["server/**/*", "agent/**/*", "web/**/*", "tests/**/*"]
+  "include": [
+    "agent/**/*",
+    "server/**/*",
+    "tests/**/*",
+    "web/**/*",
+    ".next/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }
