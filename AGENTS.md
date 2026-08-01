@@ -1,0 +1,37 @@
+# AGENTS.md — Agacy
+
+Entry-point instructions for any coding agent working in this repo (Claude Code, Codex, Cursor, or otherwise). Read this before making changes.
+
+## What this project is
+Agacy — Agentic Privacy for AI Agents. A confidential AI agent wallet on Solana. See `docs/PRD.md` for the full product spec, `docs/FEATURES.md` for current build status, `docs/INFRASTRUCTURE.md` for the stack, and `docs/ARCHITECTURE.md` for code-structure rules — **read `docs/ARCHITECTURE.md` before writing any code in this repo, its layering/DTO rules are non-negotiable.**
+
+## Installed skills
+This repo has agent skills installed under `.agents/skills/` (installed via `npx skills add`, universal across Claude Code/Codex/Cursor/etc.). Use them proactively when relevant, don't wait to be asked by name:
+
+| Skill | Use when |
+|---|---|
+| `design-taste-frontend`, `design-taste-frontend-v1` | Building or reviewing any UI screen — apply before shipping frontend work, not after. |
+| `high-end-visual-design`, `minimalist-ui`, `industrial-brutalist-ui` | Choosing a visual direction for the demo UI (public/authorized views) — pick one style and apply consistently rather than mixing. |
+| `brandkit` | Anything touching the Agacy name/logo/visual identity. |
+| `stitch-design-taste`, `gpt-taste` | General taste/quality pass on generated UI or copy. |
+| `image-to-code` | Converting a design mock/screenshot into actual component code. |
+| `imagegen-frontend-web`, `imagegen-frontend-mobile` | Generating imagery/assets for the web or mobile demo surfaces. |
+| `redesign-existing-projects` | Revisiting/improving UI once a first pass already exists — not for greenfield work. |
+| `full-output-enforcement` | Ensure generated code/content isn't silently truncated — apply when producing large files. |
+
+Check each skill's own instructions (under `.agents/skills/<name>/`) for specifics before invoking.
+
+## Hard rules (see docs/ARCHITECTURE.md for full detail)
+1. Data layer, service/business-logic layer, and presentation layer stay separate — no Solana RPC or decryption calls inside UI components, no business rules inside data-fetching code.
+2. Cross-layer data only moves as DTOs (`/server/dto`), never raw SDK types.
+3. `PublicTransactionDTO` and `AuthorizedTransactionDTO` are distinct types — never merge them into one object with a "hide this" flag. The public/private boundary must be enforced by the type system, not by UI logic remembering to hide a field.
+
+## What NOT to do
+- Do not copy code from `IsSlashy/Protocol-01` or any other proprietary/no-license repo — see `docs/references/03-competitive-landscape.md` for why Agacy's differentiation depends on this being original work.
+- Do not add identity/KYA/accountability features — out of scope, see `docs/FEATURES.md`.
+- Do not commit `docs/` to the public GitHub repo — it's gitignored intentionally (planning docs stay local).
+
+## Where to look for context
+- Product reasoning & evidence: `docs/references/`
+- Current build status: `docs/FEATURES.md` (keep statuses updated as you work)
+- Stack & build order: `docs/INFRASTRUCTURE.md`
