@@ -10,3 +10,4 @@ target/
 skills-lock.json
 .codex/
 graphify-out/
+tmp/
