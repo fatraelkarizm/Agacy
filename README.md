@@ -23,7 +23,7 @@ An AI agent transacts on Solana through native **Confidential Transfer** (Token-
 | Spend policy program | [`AmJYcUrs36n…`](https://explorer.solana.com/address/AmJYcUrs36nwpiEZxJDB5q49LbXypBVujNVMvKMWg19e?cluster=devnet) |
 | Transferred amount readable on-chain | **No** — verified by reading the recipient account bytes |
 
-66 tests passing (56 TypeScript, 10 Rust).
+92 tests passing (82 TypeScript, 10 Rust).
 
 ## Run it
 

@@ -244,7 +244,7 @@ function Intro({ onStart }: { onStart: () => void }) {
         <StatCard value="2.3M" label="AI agents transacting on-chain today" />
         <StatCard value="165M" label="agent payments processed via x402" />
         <StatCard value="+207%" label="jump in phishing losses as attackers began targeting visible balances" />
-        <StatCard value="66" label="tests passing across the crypto, policy, and agent layers" />
+        <StatCard value="92" label="tests passing across the crypto, policy, and agent layers" />
       </div>
     </header>
   );
