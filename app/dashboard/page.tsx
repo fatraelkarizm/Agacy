@@ -22,7 +22,9 @@ import { AgentSetup } from "../AgentSetup";
 import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
+import { fetchOnChainPolicyStatus } from "../../server/services/spend-policy";
 import { createDevnetClient } from "../../server/data/solana-client";
+import type { OnChainPolicyStatusDTO } from "../../server/dto/agent.dto";
 import {
   disconnectOwnerWallet,
   restoreOwnerWallet,
@@ -88,6 +90,8 @@ export default function DashboardPage() {
   const [provisionedPolicy, setProvisionedPolicy] = useState<ProvisionedPolicyDTO | null>(null);
   const [provisioning, setProvisioning] = useState(false);
   const [provisioningError, setProvisioningError] = useState<string | null>(null);
+  const [onChainPolicy, setOnChainPolicy] = useState<OnChainPolicyStatusDTO | null>(null);
+  const [onChainPolicyLoading, setOnChainPolicyLoading] = useState(false);
 
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [executed, setExecuted] = useState<AgentExecutionDTO[]>([]);
@@ -173,6 +177,31 @@ export default function DashboardPage() {
     provisionedPolicy,
     setupDraft,
   ]);
+
+  // Once a policy account exists on devnet, the Policies view should show
+  // what's actually written there rather than only the local draft — this is
+  // the "reload from real data" half of provisioning, not just "create it."
+  useEffect(() => {
+    if (!provisionedPolicy) {
+      setOnChainPolicy(null);
+      return;
+    }
+    let active = true;
+    setOnChainPolicyLoading(true);
+    void fetchOnChainPolicyStatus(devnetClient, provisionedPolicy.policyAccount)
+      .then((status) => {
+        if (active) setOnChainPolicy(status);
+      })
+      .catch(() => {
+        if (active) setOnChainPolicy(null);
+      })
+      .finally(() => {
+        if (active) setOnChainPolicyLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [provisionedPolicy]);
 
   const disconnect = useCallback(async () => {
     if (!ownerWallet) return;
@@ -260,6 +289,8 @@ export default function DashboardPage() {
       ownerWallet={ownerWallet}
       agent={agent}
       policy={policy}
+      onChainPolicy={onChainPolicy}
+      onChainPolicyLoading={onChainPolicyLoading}
       publicTransactions={publicTransactions}
       authorizedTransactions={authorizedTransactions}
       balance={balance}

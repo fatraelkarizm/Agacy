@@ -62,3 +62,22 @@ export interface AgentExecutionDTO {
   readonly recipient: string;
   readonly reasoning: string;
 }
+
+/**
+ * What the Policies dashboard view is allowed to render about a live
+ * on-chain policy account. Distinct from `SpendPolicyDTO` (the owner's local
+ * draft) on purpose — this DTO only exists once a real account has been
+ * fetched from devnet, so its presence in the UI is itself the signal that
+ * "this is real, not local demo state."
+ */
+export interface OnChainPolicyStatusDTO {
+  readonly policyAccount: string;
+  readonly owner: string;
+  readonly agent: string;
+  readonly maxPerTransfer: bigint;
+  readonly maxPerPeriod: bigint;
+  readonly periodSeconds: bigint;
+  readonly spentInPeriod: bigint;
+  /** Unix seconds the current period started. */
+  readonly periodStart: bigint;
+}

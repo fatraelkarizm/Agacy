@@ -25,7 +25,7 @@ import {
   Users,
   Wallet,
 } from "@phosphor-icons/react";
-import type { AgentDraftDTO, SpendPolicyDTO } from "../server/dto/agent.dto";
+import type { AgentDraftDTO, OnChainPolicyStatusDTO, SpendPolicyDTO } from "../server/dto/agent.dto";
 import type {
   AgentOperationalStatus,
   DashboardSection,
@@ -62,6 +62,8 @@ interface DashboardProps {
   readonly ownerWallet: WalletConnectionDTO;
   readonly agent: AgentDraftDTO | null;
   readonly policy: SpendPolicyDTO | null;
+  readonly onChainPolicy: OnChainPolicyStatusDTO | null;
+  readonly onChainPolicyLoading: boolean;
   readonly publicTransactions: readonly PublicTransactionDTO[];
   readonly authorizedTransactions: readonly AuthorizedTransactionDTO[];
   readonly balance: bigint;
@@ -82,6 +84,8 @@ export function Dashboard({
   ownerWallet,
   agent,
   policy,
+  onChainPolicy,
+  onChainPolicyLoading,
   publicTransactions,
   authorizedTransactions,
   balance,
@@ -160,6 +164,8 @@ export function Dashboard({
               ownerWallet={ownerWallet}
               agent={agent}
               policy={policy}
+              onChainPolicy={onChainPolicy}
+              onChainPolicyLoading={onChainPolicyLoading}
               publicTransactions={publicTransactions}
               authorizedTransactions={authorizedTransactions}
               balance={balance}
@@ -206,7 +212,14 @@ function DashboardSectionContent(props: DashboardSectionContentProps) {
         />
       );
     case "policies":
-      return <PolicyWorkspace policy={props.policy} onNewAgent={props.onNewAgent} />;
+      return (
+        <PolicyWorkspace
+          policy={props.policy}
+          onChainPolicy={props.onChainPolicy}
+          onChainPolicyLoading={props.onChainPolicyLoading}
+          onNewAgent={props.onNewAgent}
+        />
+      );
     case "security":
       return <SecurityWorkspace onProof={props.onProof} />;
     case "settings":
@@ -442,19 +455,42 @@ function AuthorizedTransactionRegistry({ transactions }: { transactions: readonl
   );
 }
 
-function PolicyWorkspace({ policy, onNewAgent }: { policy: SpendPolicyDTO | null; onNewAgent: () => void }) {
+function PolicyWorkspace({
+  policy,
+  onChainPolicy,
+  onChainPolicyLoading,
+  onNewAgent,
+}: {
+  policy: SpendPolicyDTO | null;
+  onChainPolicy: OnChainPolicyStatusDTO | null;
+  onChainPolicyLoading: boolean;
+  onNewAgent: () => void;
+}) {
   return (
     <div className="dashboard-workspace">
-      <div className="dashboard-workspace-intro"><div><h2>Limits live outside the prompt.</h2><p>The current demo validates policy locally. Delegate binding remains the next on-chain integration step.</p></div></div>
+      <div className="dashboard-workspace-intro"><div><h2>Limits live outside the prompt.</h2><p>The per-transfer run below still checks policy locally. Delegate binding — making that check unbypassable on-chain — remains the next integration step (tracked in FEATURES.md).</p></div></div>
       {policy ? (
         <section className="dashboard-policy-grid">
           <PolicyFact label="Per transfer" value={`${formatTokens(policy.maxPerTransfer)} USDC`} icon={Receipt} />
           <PolicyFact label="Per period" value={`${formatTokens(policy.maxPerPeriod)} USDC`} icon={Database} />
           <PolicyFact label="Recipients" value={policy.allowedRecipients.length ? String(policy.allowedRecipients.length) : "Any"} icon={Users} />
-          <PolicyFact label="Chain status" value="Delegate pending" icon={ShieldWarning} />
+          <PolicyFact
+            label="Chain status"
+            value={onChainPolicyLoading ? "Checking devnet..." : onChainPolicy ? "Account provisioned" : "Not provisioned"}
+            icon={onChainPolicy ? ShieldCheck : ShieldWarning}
+          />
         </section>
       ) : (
         <div className="dashboard-empty-state standalone"><ShieldCheck aria-hidden="true" size={36} weight="duotone" /><div><strong>No spend policy configured</strong><p>Create an agent to define its spending boundary.</p></div><button className="primary" onClick={onNewAgent}>Create agent</button></div>
+      )}
+
+      {onChainPolicy && (
+        <section className="dashboard-policy-grid">
+          <PolicyFact label="On-chain per transfer" value={`${formatTokens(onChainPolicy.maxPerTransfer)} USDC`} icon={Receipt} />
+          <PolicyFact label="On-chain per period" value={`${formatTokens(onChainPolicy.maxPerPeriod)} USDC`} icon={Database} />
+          <PolicyFact label="Spent this period" value={`${formatTokens(onChainPolicy.spentInPeriod)} USDC`} icon={Receipt} />
+          <PolicyFact label="Policy account" value={`${onChainPolicy.policyAccount.slice(0, 8)}…`} icon={Key} />
+        </section>
       )}
     </div>
   );

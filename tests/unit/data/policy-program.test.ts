@@ -10,6 +10,7 @@ import {
   buildProvisionPolicyAccountInstructions,
   buildUpdateLimitsInstruction,
   decodePolicyAccount,
+  fetchPolicyAccount,
 } from "@data/policy-program";
 
 const OWNER = address("5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5");
@@ -194,5 +195,35 @@ describe("policy account decoding", () => {
   it("agrees with the length the program allocates", () => {
     // If this drifts, the client and program disagree about the layout.
     expect(POLICY_ACCOUNT_LEN).toBe(105);
+  });
+});
+
+function bytesToBase64(bytes: Uint8Array): string {
+  return btoa(String.fromCharCode(...bytes));
+}
+
+function clientWithAccountData(bytes: Uint8Array | null): SolanaClient {
+  return {
+    rpc: {
+      getAccountInfo: vi.fn(() => ({
+        send: () =>
+          Promise.resolve({
+            value: bytes ? { data: [bytesToBase64(bytes), "base64"] } : null,
+          }),
+      })),
+    },
+  } as never;
+}
+
+describe("fetching a policy account from devnet", () => {
+  it("decodes a live account into the same shape decodePolicyAccount produces", async () => {
+    const encoded = encodePolicyAccount({ maxPerTransfer: 7_000_000n });
+    const state = await fetchPolicyAccount(clientWithAccountData(encoded), POLICY);
+    expect(state).toEqual(decodePolicyAccount(encoded));
+  });
+
+  it("returns null instead of throwing when the account has not been provisioned yet", async () => {
+    const state = await fetchPolicyAccount(clientWithAccountData(null), POLICY);
+    expect(state).toBeNull();
   });
 });

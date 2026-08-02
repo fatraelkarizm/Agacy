@@ -1,4 +1,12 @@
-import type { AgentDecisionDTO, PolicyVerdictDTO, SpendPolicyDTO } from "../dto/agent.dto";
+import { fetchPolicyAccount } from "../data/policy-program";
+import type { SolanaClient } from "../data/solana-client";
+import { address } from "@solana/kit";
+import type {
+  AgentDecisionDTO,
+  OnChainPolicyStatusDTO,
+  PolicyVerdictDTO,
+  SpendPolicyDTO,
+} from "../dto/agent.dto";
 
 /**
  * Spend policy evaluation.
@@ -75,4 +83,28 @@ export function evaluateSpendPolicy(
   }
 
   return { compliant: true, reason: "" };
+}
+
+/**
+ * Read the real state of a provisioned policy account, for the Policies
+ * dashboard view. Returns `null` when the account doesn't exist yet (not
+ * provisioned) rather than throwing — that's an expected state, not an error.
+ */
+export async function fetchOnChainPolicyStatus(
+  client: SolanaClient,
+  policyAccount: string,
+): Promise<OnChainPolicyStatusDTO | null> {
+  const state = await fetchPolicyAccount(client, address(policyAccount));
+  if (!state) return null;
+
+  return {
+    policyAccount,
+    owner: state.owner,
+    agent: state.agent,
+    maxPerTransfer: state.maxPerTransfer,
+    maxPerPeriod: state.maxPerPeriod,
+    periodSeconds: state.periodSeconds,
+    spentInPeriod: state.spentInPeriod,
+    periodStart: state.periodStart,
+  };
 }

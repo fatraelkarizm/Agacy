@@ -160,6 +160,26 @@ export interface PolicyAccountState {
   readonly periodStart: bigint;
 }
 
+/**
+ * Read a policy account straight from devnet and decode it. Returns `null`
+ * for "the account doesn't exist yet" (not yet provisioned) rather than
+ * throwing, so a caller doesn't have to distinguish "not found" from a real
+ * RPC failure by string-matching an error message.
+ */
+export async function fetchPolicyAccount(
+  client: SolanaClient,
+  policyAccount: Address,
+): Promise<PolicyAccountState | null> {
+  const { value } = await client.rpc
+    .getAccountInfo(policyAccount, { commitment: "confirmed", encoding: "base64" })
+    .send();
+  if (!value) return null;
+
+  const raw = value.data[0];
+  const bytes = Uint8Array.from(atob(raw), (char) => char.charCodeAt(0));
+  return decodePolicyAccount(bytes);
+}
+
 const DISCRIMINATOR = 0xa6;
 
 export function decodePolicyAccount(data: Uint8Array): PolicyAccountState {
