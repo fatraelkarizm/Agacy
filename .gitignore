@@ -13,3 +13,4 @@ graphify-out/
 tmp/
 .next/
 out/
+program/target/

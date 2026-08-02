@@ -8,5 +8,7 @@
   "transferSignature": "5vTuKeoULGc26FdNoxCVErWbYzet1jReDhgRqvp2Le9erDsWTx8p4P4VCGotC9mwFHaifazLeAbzq2mpCLwqAEtz",
   "transferAmount": "2500000",
   "remainingBalance": "7500000",
-  "amountFoundInRecipientAccountData": false
+  "amountFoundInRecipientAccountData": false,
+  "policyProgramId": "AmJYcUrs36nwpiEZxJDB5q49LbXypBVujNVMvKMWg19e",
+  "policyDeploySignature": "4eyGCH9QAeYUvUEMh51nmKr1ZzeJLswCu6J389JPqohJR3nGFdbFaCCc4dg4zpDJJGtA4VMY27cmSGiBUw7NdwN4"
 }

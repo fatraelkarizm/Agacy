@@ -1,0 +1,15 @@
+[package]
+name = "agacy-policy"
+version = "0.1.0"
+edition = "2021"
+description = "On-chain spend policy enforcement for Agacy agent wallets"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "agacy_policy"
+
+[dependencies]
+solana-program = "2.1"
+
+# No dev-dependencies: the tests here cover pure policy logic, and pulling in
+# solana-program-test would drag an OpenSSL build into the tree for no benefit.

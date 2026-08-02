@@ -166,6 +166,7 @@ export default function Home() {
             <ProofItem label="Transfer transaction" value={devnetProof.transferSignature} link />
             <ProofItem label="Confidential mint" value={devnetProof.mint} link />
             <ProofItem label="Recipient account" value={devnetProof.recipientAccount} link />
+            <ProofItem label="Policy program" value={devnetProof.policyProgramId} link />
             <div className="proof-item">
               <div className="proof-label">Amount readable on-chain</div>
               <div className="proof-verdict">
