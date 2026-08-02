@@ -1,6 +1,19 @@
 "use client";
 
 import Image from "next/image";
+import {
+  Brain,
+  Buildings,
+  CursorClick,
+  Eye,
+  EyeSlash,
+  FileText,
+  PaperPlaneTilt,
+  Pulse,
+  ShieldCheck,
+  UserCircle,
+  Wallet,
+} from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
 import type {
@@ -178,9 +191,12 @@ export default function Home() {
                 {link.label}
               </button>
             ))}
+            <a href="/docs">
+              <FileText aria-hidden="true" size={14} weight="duotone" />
+              Docs
+            </a>
           </div>
           <div className="nav-actions">
-            <a href="/docs">Docs</a>
             {ownerWallet && (
               <button className="nav-disconnect" onClick={() => void disconnect()}>
                 Disconnect
@@ -191,6 +207,9 @@ export default function Home() {
               onClick={() => setStage(ownerWallet ? "setup" : "connect")}
               disabled={restoringWallet}
             >
+              {!restoringWallet && !ownerWallet && (
+                <Wallet aria-hidden="true" size={17} weight="duotone" />
+              )}
               {restoringWallet
                 ? "Checking wallet..."
                 : ownerWallet
@@ -382,54 +401,82 @@ function Intro({ onStart, onProof }: { onStart: () => void; onProof: () => void 
       </section>
 
       <section className="landing-section exposure-section">
-        <div className="wrap exposure-grid">
-          <div className="section-copy">
+        <div className="wrap exposure-bento">
+          <div className="section-copy exposure-intro">
+            <EyeSlash className="bento-ghost-icon" aria-hidden="true" weight="duotone" />
             <h2>A public ledger becomes an intelligence feed.</h2>
             <p>
               Continuous agent activity exposes balances, spending patterns, and business
               relationships to anyone watching the chain.
             </p>
           </div>
-          <dl className="exposure-list">
+          <article className="exposure-cell exposure-personal">
+            <UserCircle aria-hidden="true" size={31} weight="duotone" />
             <div>
-              <dt>Personal wallets</dt>
-              <dd>Visible balances make owners easier to profile and target.</dd>
+              <h3>Personal wallets</h3>
+              <p>Visible balances make owners easier to profile and target.</p>
             </div>
+          </article>
+          <article className="exposure-cell exposure-business">
+            <Buildings aria-hidden="true" size={29} weight="duotone" />
             <div>
-              <dt>Business agents</dt>
-              <dd>Transaction history can reveal suppliers, revenue signals, and strategy.</dd>
+              <h3>Business agents</h3>
+              <p>History can reveal suppliers, revenue signals, and strategy.</p>
             </div>
+          </article>
+          <article className="exposure-cell exposure-always-on">
+            <Pulse aria-hidden="true" size={29} weight="duotone" />
             <div>
-              <dt>Always-on activity</dt>
-              <dd>Autonomous agents create a continuous stream of searchable financial data.</dd>
+              <h3>Always-on activity</h3>
+              <p>Every autonomous action adds searchable financial data.</p>
             </div>
-          </dl>
+          </article>
         </div>
       </section>
 
       <section className="landing-section boundary-section" id="how-it-works">
-        <div className="wrap boundary-wrap">
-          <div className="section-copy">
+        <div className="wrap boundary-bento">
+          <div className="section-copy boundary-intro">
+            <ShieldCheck className="bento-ghost-icon" aria-hidden="true" weight="duotone" />
             <h2>Autonomy needs a boundary outside the model.</h2>
             <p>
               The agent may propose a payment. Agacy checks policy before funds move, so a prompt
               cannot negotiate past the account limits.
             </p>
           </div>
-          <ol className="agent-sequence" aria-label="Agacy agent execution flow">
-            <li><strong>Observe</strong><span>Read the task</span></li>
-            <li><strong>Reason</strong><span>Choose an action</span></li>
-            <li><strong>Decide</strong><span>Propose payment</span></li>
-            <li><strong>Policy check</strong><span>Enforce limits</span></li>
-            <li><strong>Execute</strong><span>Transfer privately</span></li>
-          </ol>
+          <article className="sequence-cell sequence-observe">
+            <Eye aria-hidden="true" size={27} weight="duotone" />
+            <strong>Observe</strong>
+            <span>Read the task</span>
+          </article>
+          <article className="sequence-cell sequence-reason">
+            <Brain aria-hidden="true" size={27} weight="duotone" />
+            <strong>Reason</strong>
+            <span>Choose an action</span>
+          </article>
+          <article className="sequence-cell sequence-decide">
+            <CursorClick aria-hidden="true" size={27} weight="duotone" />
+            <strong>Decide</strong>
+            <span>Propose payment</span>
+          </article>
+          <article className="sequence-cell sequence-policy">
+            <ShieldCheck aria-hidden="true" size={27} weight="duotone" />
+            <strong>Policy check</strong>
+            <span>Enforce owner limits</span>
+          </article>
+          <article className="sequence-cell sequence-execute">
+            <PaperPlaneTilt aria-hidden="true" size={29} weight="duotone" />
+            <div>
+              <strong>Execute</strong>
+              <span>Transfer privately only after policy approval.</span>
+            </div>
+          </article>
         </div>
       </section>
 
       <section className="landing-section onboarding-section" id="onboarding">
         <div className="wrap onboarding-overview">
           <div className="section-copy">
-            <p className="proof-kicker">Owner-controlled onboarding</p>
             <h2>From wallet connection to bounded autonomy.</h2>
             <p>
               The owner establishes control first. Agent authority is introduced gradually and
