@@ -7,7 +7,11 @@ import type {
   InjectedWalletMap,
   InjectedWalletProvider,
   InjectedWalletRegistry,
+  WalletSessionStorage,
 } from "../types/wallet-provider";
+import { isWalletProviderId } from "../schema/wallet.schema";
+
+const SESSION_KEY = "agacy.owner-wallet-provider";
 
 const PROVIDERS: ReadonlyArray<Omit<WalletProviderOptionDTO, "installed">> = [
   {
@@ -24,6 +28,14 @@ const PROVIDERS: ReadonlyArray<Omit<WalletProviderOptionDTO, "installed">> = [
 
 function browserRegistry(): InjectedWalletRegistry {
   return typeof window === "undefined" ? {} : (window as unknown as InjectedWalletRegistry);
+}
+
+function browserStorage(): WalletSessionStorage | undefined {
+  try {
+    return typeof window === "undefined" ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
 }
 
 function injectedWallets(registry: InjectedWalletRegistry): InjectedWalletMap {
@@ -43,14 +55,70 @@ export function detectInjectedWallets(
 export async function connectInjectedWallet(
   providerId: WalletProviderId,
   registry: InjectedWalletRegistry = browserRegistry(),
+  onlyIfTrusted = false,
 ): Promise<WalletConnectionDTO> {
   const provider: InjectedWalletProvider | undefined = injectedWallets(registry)[providerId];
   if (!provider) throw new Error(`${providerId} extension is not installed.`);
 
-  const response = await provider.connect();
+  const response = await provider.connect(onlyIfTrusted ? { onlyIfTrusted: true } : undefined);
   const publicKey = response?.publicKey ?? provider.publicKey;
   const address = publicKey?.toString().trim();
   if (!address) throw new Error(`${providerId} did not return a wallet address.`);
 
   return { provider: providerId, address, network: "devnet", connected: true };
+}
+
+export function rememberWalletProvider(
+  provider: WalletProviderId,
+  storage: WalletSessionStorage | undefined = browserStorage(),
+): void {
+  try {
+    storage?.setItem(SESSION_KEY, provider);
+  } catch {
+    // Session restore is best-effort; a private browser mode must not break connection.
+  }
+}
+
+export function readRememberedWalletProvider(
+  storage: WalletSessionStorage | undefined = browserStorage(),
+): WalletProviderId | null {
+  try {
+    const provider = storage?.getItem(SESSION_KEY);
+    return isWalletProviderId(provider) ? provider : null;
+  } catch {
+    return null;
+  }
+}
+
+export function forgetWalletProvider(
+  storage: WalletSessionStorage | undefined = browserStorage(),
+): void {
+  try {
+    storage?.removeItem(SESSION_KEY);
+  } catch {
+    // Disconnect still succeeds when storage is unavailable.
+  }
+}
+
+export async function disconnectInjectedWallet(
+  providerId: WalletProviderId,
+  registry: InjectedWalletRegistry = browserRegistry(),
+): Promise<void> {
+  await injectedWallets(registry)[providerId]?.disconnect?.();
+}
+
+export function watchInjectedWalletSession(
+  providerId: WalletProviderId,
+  onInvalidated: () => void,
+  registry: InjectedWalletRegistry = browserRegistry(),
+): () => void {
+  const provider = injectedWallets(registry)[providerId];
+  if (!provider?.on) return () => undefined;
+
+  provider.on("disconnect", onInvalidated);
+  provider.on("accountChanged", onInvalidated);
+  return () => {
+    provider.off?.("disconnect", onInvalidated);
+    provider.off?.("accountChanged", onInvalidated);
+  };
 }

@@ -1,4 +1,12 @@
-import { connectInjectedWallet, detectInjectedWallets } from "../data/wallet-provider";
+import {
+  connectInjectedWallet,
+  detectInjectedWallets,
+  disconnectInjectedWallet,
+  forgetWalletProvider,
+  readRememberedWalletProvider,
+  rememberWalletProvider,
+  watchInjectedWalletSession,
+} from "../data/wallet-provider";
 import type {
   WalletConnectionDTO,
   WalletProviderId,
@@ -13,7 +21,9 @@ export async function connectOwnerWallet(
   provider: WalletProviderId,
 ): Promise<WalletConnectionDTO> {
   try {
-    return await connectInjectedWallet(provider);
+    const connection = await connectInjectedWallet(provider);
+    rememberWalletProvider(provider);
+    return connection;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Wallet connection failed.";
     if (/reject|cancel/i.test(message)) {
@@ -21,4 +31,34 @@ export async function connectOwnerWallet(
     }
     throw new Error(message);
   }
+}
+
+export async function restoreOwnerWallet(): Promise<WalletConnectionDTO | null> {
+  const provider = readRememberedWalletProvider();
+  if (!provider) return null;
+
+  try {
+    return await connectInjectedWallet(provider, undefined, true);
+  } catch {
+    forgetWalletProvider();
+    return null;
+  }
+}
+
+export async function disconnectOwnerWallet(provider: WalletProviderId): Promise<void> {
+  try {
+    await disconnectInjectedWallet(provider);
+  } finally {
+    forgetWalletProvider();
+  }
+}
+
+export function watchOwnerWalletSession(
+  provider: WalletProviderId,
+  onInvalidated: () => void,
+): () => void {
+  return watchInjectedWalletSession(provider, () => {
+    forgetWalletProvider();
+    onInvalidated();
+  });
 }

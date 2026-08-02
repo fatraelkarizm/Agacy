@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import {
   PURPOSE_PRESETS,
   toPolicyInitParams,
@@ -15,23 +14,19 @@ const PURPOSE_LABELS: Record<AgentPurpose, { title: string; blurb: string }> = {
   custom: { title: "Custom", blurb: "Set every limit yourself" },
 };
 
-export interface AgentSetupProps {
+interface AgentSetupProps {
+  readonly draft: AgentDraftDTO;
+  readonly onDraftChange: (draft: AgentDraftDTO) => void;
   readonly onCreate: (draft: AgentDraftDTO) => void;
 }
 
-export function AgentSetup({ onCreate }: AgentSetupProps) {
-  const [draft, setDraft] = useState<AgentDraftDTO>({
-    name: "Ops agent",
-    purpose: "subscriptions",
-    ...PURPOSE_PRESETS.subscriptions,
-  });
-
+export function AgentSetup({ draft, onDraftChange, onCreate }: AgentSetupProps) {
   const issues = validateAgentDraft(draft);
   const set = <K extends keyof AgentDraftDTO>(key: K, value: AgentDraftDTO[K]) =>
-    setDraft((prev) => ({ ...prev, [key]: value }));
+    onDraftChange({ ...draft, [key]: value });
 
   const choosePurpose = (purpose: AgentPurpose) =>
-    setDraft((prev) => ({ ...prev, purpose, ...PURPOSE_PRESETS[purpose] }));
+    onDraftChange({ ...draft, purpose, ...PURPOSE_PRESETS[purpose] });
 
   const issueFor = (field: keyof AgentDraftDTO) =>
     issues.find((issue) => issue.field === field)?.message;

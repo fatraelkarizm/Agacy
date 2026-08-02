@@ -40,6 +40,11 @@ export function WalletGate({ onConnected }: WalletGateProps) {
 
   return (
     <section className="card wallet-gate" aria-busy={phase === "detecting"}>
+      <div className="wallet-network">
+        <span aria-hidden="true" />
+        <strong>Solana devnet</strong>
+        <small>This build only prepares and submits devnet transactions.</small>
+      </div>
       <div className="wallet-list">
         {phase === "detecting" && <p className="hint">Checking browser wallet extensions...</p>}
         {providers.map((provider) => (

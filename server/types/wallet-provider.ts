@@ -8,7 +8,12 @@ export interface InjectedWalletProvider {
   readonly isPhantom?: boolean;
   readonly isSolflare?: boolean;
   readonly publicKey?: WalletPublicKey | null;
-  connect(): Promise<{ readonly publicKey?: WalletPublicKey } | void>;
+  connect(options?: { readonly onlyIfTrusted?: boolean }): Promise<
+    { readonly publicKey?: WalletPublicKey } | void
+  >;
+  disconnect?(): Promise<void>;
+  on?(event: "disconnect" | "accountChanged", listener: () => void): void;
+  off?(event: "disconnect" | "accountChanged", listener: () => void): void;
 }
 
 export interface InjectedWalletRegistry {
@@ -18,3 +23,5 @@ export interface InjectedWalletRegistry {
 }
 
 export type InjectedWalletMap = Partial<Record<WalletProviderId, InjectedWalletProvider>>;
+
+export type WalletSessionStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;

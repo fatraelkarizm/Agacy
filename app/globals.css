@@ -147,6 +147,15 @@ body::after {
 
 .nav-actions a:hover { color: var(--text); }
 .nav-launch { padding: 9px 16px; white-space: nowrap; }
+.nav-disconnect {
+  padding: 7px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+.nav-disconnect:hover:not(:disabled) { border-color: transparent; background: transparent; color: var(--text); }
 
 /* ---------- shared ---------- */
 
@@ -649,6 +658,28 @@ button.primary:hover:not(:disabled) {
 .wallet-gate { padding: 12px; }
 .wallet-list { display: grid; gap: 10px; }
 
+.wallet-network {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+}
+
+.wallet-network > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--private);
+  box-shadow: 0 0 10px rgba(74, 222, 155, 0.55);
+}
+
+.wallet-network strong { color: var(--text); font-weight: 560; }
+.wallet-network small { color: var(--text-faint); font-size: 0.72rem; }
+
 .wallet-option {
   display: grid;
   grid-template-columns: auto 1fr auto;
@@ -719,6 +750,8 @@ button.primary:hover:not(:disabled) {
 }
 
 @media (max-width: 560px) {
+  .wallet-network { grid-template-columns: auto 1fr; }
+  .wallet-network small { grid-column: 2; }
   .wallet-option { grid-template-columns: auto 1fr; }
   .wallet-option > button,
   .wallet-option > .wallet-install { grid-column: 1 / -1; text-align: center; }

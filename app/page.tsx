@@ -9,7 +9,12 @@ import { ciphertextPreview, formatTokens } from "../server/services/demo-scenari
 import devnetProof from "../server/data/devnet-proof.json";
 import { AgentSetup } from "./AgentSetup";
 import { WalletGate } from "./WalletGate";
-import { toSpendPolicy } from "../server/services/agent-setup";
+import { PURPOSE_PRESETS, toSpendPolicy } from "../server/services/agent-setup";
+import {
+  disconnectOwnerWallet,
+  restoreOwnerWallet,
+  watchOwnerWalletSession,
+} from "../server/services/wallet-connection";
 
 /**
  * The demo is a guided walkthrough rather than one long page: you define an
@@ -60,6 +65,12 @@ interface Executed {
 export default function Home() {
   const [stage, setStage] = useState<Stage>("intro");
   const [ownerWallet, setOwnerWallet] = useState<WalletConnectionDTO | null>(null);
+  const [restoringWallet, setRestoringWallet] = useState(true);
+  const [setupDraft, setSetupDraft] = useState<AgentDraftDTO>({
+    name: "Ops agent",
+    purpose: "subscriptions",
+    ...PURPOSE_PRESETS.subscriptions,
+  });
   const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
   const [policy, setPolicy] = useState<SpendPolicyDTO | null>(null);
 
@@ -76,6 +87,40 @@ export default function Home() {
     setDone(false);
     setOwnerView(false);
   }, []);
+
+  const invalidateWallet = useCallback(() => {
+    setOwnerWallet(null);
+    setAgent(null);
+    setPolicy(null);
+    reset();
+    setStage("connect");
+  }, [reset]);
+
+  useEffect(() => {
+    let active = true;
+    void restoreOwnerWallet().then((wallet) => {
+      if (active) setOwnerWallet(wallet);
+    }).finally(() => {
+      if (active) setRestoringWallet(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ownerWallet) return;
+    return watchOwnerWalletSession(ownerWallet.provider, invalidateWallet);
+  }, [invalidateWallet, ownerWallet]);
+
+  const disconnect = useCallback(async () => {
+    if (!ownerWallet) return;
+    try {
+      await disconnectOwnerWallet(ownerWallet.provider);
+    } finally {
+      invalidateWallet();
+    }
+  }, [invalidateWallet, ownerWallet]);
 
   const run = useCallback(async () => {
     if (!policy) return;
@@ -122,7 +167,10 @@ export default function Home() {
                 key={s.id}
                 className={stage === s.id ? "nav-step active" : "nav-step"}
                 onClick={() => setStage(s.id)}
-                disabled={(s.id === "setup" && !ownerWallet) || (s.id === "run" && !agent)}
+                disabled={
+                  (s.id === "setup" && !ownerWallet) ||
+                  (s.id === "run" && (!ownerWallet || !agent))
+                }
               >
                 {s.label}
               </button>
@@ -132,8 +180,21 @@ export default function Home() {
             <a href="https://github.com/fatraelkarizm/Agacy" target="_blank" rel="noreferrer">
               GitHub
             </a>
-            <button className="primary nav-launch" onClick={() => setStage("connect")}>
-              {ownerWallet ? shortAddress(ownerWallet.address) : "Launch demo"}
+            {ownerWallet && (
+              <button className="nav-disconnect" onClick={() => void disconnect()}>
+                Disconnect
+              </button>
+            )}
+            <button
+              className="primary nav-launch"
+              onClick={() => setStage(ownerWallet ? "setup" : "connect")}
+              disabled={restoringWallet}
+            >
+              {restoringWallet
+                ? "Checking wallet..."
+                : ownerWallet
+                  ? shortAddress(ownerWallet.address)
+                  : "Launch demo"}
             </button>
           </div>
         </div>
@@ -174,11 +235,13 @@ export default function Home() {
             {ownerWallet && (
               <p className="connected-owner">
                 <span aria-hidden="true" /> {shortAddress(ownerWallet.address)} connected via{" "}
-                {ownerWallet.provider}
+                {ownerWallet.provider} on {ownerWallet.network}
               </p>
             )}
           </div>
           <AgentSetup
+            draft={setupDraft}
+            onDraftChange={setSetupDraft}
             onCreate={(draft) => {
               setAgent(draft);
               setPolicy(toSpendPolicy(draft));
