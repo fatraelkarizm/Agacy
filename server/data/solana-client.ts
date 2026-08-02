@@ -19,8 +19,13 @@ import { join } from "node:path";
  * expected to hand results up to the service layer for interpretation.
  */
 
-export const DEVNET_RPC_URL = "https://api.devnet.solana.com";
-export const DEVNET_WS_URL = "wss://api.devnet.solana.com";
+/**
+ * Devnet endpoint. Overridable via AGACY_RPC_URL because the public endpoint
+ * rate-limits hard, and a confidential transfer needs several transactions in
+ * quick succession (three proof verifications, the transfer, then cleanup).
+ */
+export const DEVNET_RPC_URL = process.env["AGACY_RPC_URL"] ?? "https://api.devnet.solana.com";
+export const DEVNET_WS_URL = process.env["AGACY_WS_URL"] ?? "wss://api.devnet.solana.com";
 
 export interface SolanaClient {
   readonly rpc: Rpc<SolanaRpcApi>;

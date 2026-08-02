@@ -37,7 +37,7 @@ import { extractHandleCiphertext } from "./elgamal-arithmetic.js";
 const AUDITOR_HANDLE_INDEX = 2;
 
 /** Spacing between sequential transactions, to stay under the public RPC rate limit. */
-const pause = () => new Promise((resolve) => setTimeout(resolve, 1_200));
+const pause = () => new Promise((resolve) => setTimeout(resolve, 3_000));
 
 /**
  * Send a proof's setup instructions and its verification in separate
