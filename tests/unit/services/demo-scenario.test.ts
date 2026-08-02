@@ -68,4 +68,27 @@ describe("attack simulation", () => {
       expect(step.detail.length).toBeGreaterThan(0);
     }
   });
+
+  it("defaults to personal framing when none is given", () => {
+    const steps = buildAttackSimulation([{ amount: 1n, recipient: "R", reasoning: "r" }], 1n);
+    expect(steps[0]?.narrative).toContain("Attacker");
+  });
+
+  it("relabels the actor and the stakes for business framing without changing the outcomes", () => {
+    const personal = buildAttackSimulation(
+      [{ amount: 1_000_000n, recipient: "R", reasoning: "r" }],
+      10_000_000n,
+      "personal",
+    );
+    const business = buildAttackSimulation(
+      [{ amount: 1_000_000n, recipient: "R", reasoning: "r" }],
+      10_000_000n,
+      "business",
+    );
+
+    expect(business[0]?.narrative).toContain("Competitor");
+    expect(business[0]?.narrative).not.toContain("Attacker");
+    expect(business.map((s) => s.outcome)).toEqual(personal.map((s) => s.outcome));
+    expect(business.map((s) => s.target)).toEqual(personal.map((s) => s.target));
+  });
 });

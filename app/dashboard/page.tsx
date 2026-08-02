@@ -48,7 +48,7 @@ const devnetClient = createDevnetClient();
  * wallet address, so the refresh restores the screen, not just the wallet.
  */
 
-const TASKS: readonly AgentTask[] = [
+const PERSONAL_TASKS: readonly AgentTask[] = [
   {
     prompt: "Monthly API subscription came due, renewing at the usual rate.",
     amount: 4_200_000n,
@@ -66,6 +66,33 @@ const TASKS: readonly AgentTask[] = [
     amount: 31_750_000n,
     recipient: "Dta9mKpR5nZwQ2eXcVb7yLsHfG4jTaU6dNrMwPkB",
     recipientLabel: "Market dataset",
+  },
+];
+
+/**
+ * Same three-step shape as PERSONAL_TASKS, relabeled for a procurement
+ * agent persona (docs/FEATURES.md item 8: presentation-layer only, no new
+ * on-chain logic — the underlying Confidential Transfer / policy mechanism
+ * is identical). Picked by `agent.purpose` in the run callback below.
+ */
+const PROCUREMENT_TASKS: readonly AgentTask[] = [
+  {
+    prompt: "Monthly hosting invoice from the infrastructure vendor came due.",
+    amount: 4_200_000n,
+    recipient: "Sub1er4kQmVnH8dGpXwYzR3tNc5bVfJ2sLmQ9pDhK",
+    recipientLabel: "Infrastructure vendor",
+  },
+  {
+    prompt: "Raw materials supplier requested payment before the next shipment.",
+    amount: 12_500_000n,
+    recipient: "Cmp7yTn2WxLqE9vRb4sKfJ6hGpZa3MdUc8NrVwXt",
+    recipientLabel: "Materials supplier",
+  },
+  {
+    prompt: "Logistics partner invoice for last week's deliveries.",
+    amount: 31_750_000n,
+    recipient: "Dta9mKpR5nZwQ2eXcVb7yLsHfG4jTaU6dNrMwPkB",
+    recipientLabel: "Logistics partner",
   },
 ];
 
@@ -252,7 +279,7 @@ export default function DashboardPage() {
     lastReasoning.current = "";
 
     await runAgent({
-      tasks: TASKS,
+      tasks: agent?.purpose === "procurement" ? PROCUREMENT_TASKS : PERSONAL_TASKS,
       policy,
       initialState: { availableBalance: INITIAL_BALANCE, spentThisPeriod: 0n },
       onStep: async (step) => {
@@ -271,7 +298,7 @@ export default function DashboardPage() {
 
     setRunning(false);
     setDone(true);
-  }, [policy, reset]);
+  }, [agent, policy, reset]);
 
   if (checkingSession || !ownerWallet) {
     return (
@@ -381,7 +408,13 @@ export default function DashboardPage() {
           </div>
 
           {showAttackSim && (
-            <AttackSimulationPanel steps={buildAttackSimulation(executed, balance)} />
+            <AttackSimulationPanel
+              steps={buildAttackSimulation(
+                executed,
+                balance,
+                agent?.purpose === "procurement" ? "business" : "personal",
+              )}
+            />
           )}
         </div>
       ) : undefined}

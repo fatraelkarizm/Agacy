@@ -176,42 +176,78 @@ export interface AttackStepDTO {
   readonly detail: string;
 }
 
+/**
+ * Same mechanism, two audiences. A personal wallet is sized up by an
+ * attacker deciding whether it's worth draining; a business's procurement
+ * wallet is read by a competitor inferring supplier relationships and spend.
+ * The privacy property being demonstrated doesn't change — only who's
+ * watching and what they're after does, which is why this is a wording
+ * table rather than a second implementation (see FEATURES.md item 8: this
+ * is presentation-layer only, no new on-chain logic).
+ */
+export type AttackFraming = "personal" | "business";
+
+const ATTACKER_LABEL: Record<AttackFraming, string> = {
+  personal: "Attacker",
+  business: "Competitor",
+};
+
 export function buildAttackSimulation(
   executed: readonly AgentExecutionDTO[],
   balance: bigint,
+  framing: AttackFraming = "personal",
 ): readonly AttackStepDTO[] {
   if (executed.length === 0) return [];
 
   const last = executed[executed.length - 1]!;
+  const who = ATTACKER_LABEL[framing];
 
   return [
     {
       id: "scan-exposed",
       target: "exposed",
-      narrative: "Attacker pulls this wallet's transaction history from a public block explorer.",
+      narrative:
+        framing === "business"
+          ? `${who} pulls this business wallet's transaction history from a public block explorer.`
+          : `${who} pulls this wallet's transaction history from a public block explorer.`,
       outcome: "revealed",
-      detail: `Reads every transfer directly: last payment ${formatTokens(last.amount)} USDC to ${last.recipient.slice(0, 10)}…`,
+      detail:
+        framing === "business"
+          ? `Reads every payment directly: last supplier payment ${formatTokens(last.amount)} USDC to ${last.recipient.slice(0, 10)}… — a name and a number, not just a transaction.`
+          : `Reads every transfer directly: last payment ${formatTokens(last.amount)} USDC to ${last.recipient.slice(0, 10)}…`,
     },
     {
       id: "size-exposed",
       target: "exposed",
-      narrative: "Attacker checks the current balance to decide if this wallet is worth targeting.",
+      narrative:
+        framing === "business"
+          ? `${who} totals recent outflows to estimate procurement spend and infer revenue.`
+          : `${who} checks the current balance to decide if this wallet is worth targeting.`,
       outcome: "revealed",
-      detail: `Balance reads as plain data: ${formatTokens(balance)} USDC. Flagged as a live target.`,
+      detail:
+        framing === "business"
+          ? `Balance and payment history read as plain data: ${formatTokens(balance)} USDC. Enough to model your cost structure.`
+          : `Balance reads as plain data: ${formatTokens(balance)} USDC. Flagged as a live target.`,
     },
     {
       id: "scan-confidential",
       target: "confidential",
-      narrative: "Attacker runs the identical scan against the Agacy-protected wallet.",
+      narrative: `${who} runs the identical scan against the Agacy-protected wallet.`,
       outcome: "blocked",
       detail: "Transaction is confirmed and public, but amount and counterparty balance fields decode to ciphertext, not a number.",
     },
     {
       id: "size-confidential",
       target: "confidential",
-      narrative: "Attacker attempts to size the wallet the same way before deciding whether to pursue it.",
+      narrative:
+        framing === "business"
+          ? `${who} attempts the same spend/supplier analysis against the confidential wallet.`
+          : `${who} attempts to size the wallet the same way before deciding whether to pursue it.`,
       outcome: "blocked",
-      detail: "No plaintext balance exists anywhere on-chain to read. There is nothing to size.",
+      detail:
+        framing === "business"
+          ? "No plaintext balance or payment amount exists anywhere on-chain to read. There is no spend pattern to reconstruct."
+          : "No plaintext balance exists anywhere on-chain to read. There is nothing to size.",
     },
   ];
 }
