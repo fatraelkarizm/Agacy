@@ -7,6 +7,7 @@ const root = import.meta.dirname;
 export default defineConfig({
   test: {
     include: ["tests/integration/**/*.test.ts"],
+    setupFiles: ["tests/setup-env.ts"],
     testTimeout: 120_000,
     hookTimeout: 120_000,
   },

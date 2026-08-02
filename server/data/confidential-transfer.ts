@@ -150,10 +150,11 @@ export async function executeConfidentialTransfer(
   payer: KeyPairSigner,
   params: ConfidentialTransferParams,
 ): Promise<{ signature: string; remainingBalance: bigint }> {
-  // No auditor is configured for Agacy's mint, so the protocol's required third
-  // key is the sender's own — it satisfies the 3-handle format without handing
-  // any outside party the ability to decrypt amounts.
-  const auditorPubkey = params.senderKeys.elGamal.pubkey();
+  // Agacy's mint configures no auditor. The transfer format still carries a
+  // third handle, and the program checks it against the mint's auditor key —
+  // so it must be the all-zero default, not a stand-in like the sender's own
+  // key, which fails on-chain with "ElGamal public key mismatch".
+  const auditorPubkey = ElGamalPubkey.fromBytes(new Uint8Array(32));
 
   const proofs = generateTransferProofs({
     senderKeypair: params.senderKeys.elGamal,
@@ -235,11 +236,17 @@ export async function executeConfidentialTransfer(
     rangeProofInstructionOffset: 0,
   });
 
-  const signature = await sendInstructions(client, payer, [transferIx]);
+  let signature: string;
+  try {
+    signature = await sendInstructions(client, payer, [transferIx]);
+  } catch (cause) {
+    throw new Error("Confidential transfer instruction failed", { cause });
+  }
+  await pause();
 
   // Reclaim the rent now that the proofs have served their purpose.
-
-  await sendInstructions(client, payer, [
+  try {
+    await sendInstructions(client, payer, [
     closeContextStateProof({
       contextState: equalityContext.address,
       authority: payer,
@@ -255,7 +262,12 @@ export async function executeConfidentialTransfer(
       authority: payer,
       destination: payer.address,
     }),
-  ]);
+    ]);
+  } catch (cause) {
+    // Cleanup only reclaims rent; the transfer already landed, so a failure
+    // here must not be reported as a failed payment.
+    console.warn('Context state cleanup failed (rent not reclaimed):', (cause as Error).message);
+  }
 
   return { signature, remainingBalance: proofs.remainingBalance };
 }
