@@ -1,4 +1,4 @@
-import type { AgentDecisionDTO, PolicyVerdictDTO, SpendPolicyDTO } from "../dto/agent.dto.js";
+import type { AgentDecisionDTO, PolicyVerdictDTO, SpendPolicyDTO } from "../dto/agent.dto";
 
 /**
  * Spend policy evaluation.
