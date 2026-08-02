@@ -95,7 +95,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRunResult
   for (const task of options.tasks) {
     await emit({
       kind: "observe",
-      text: `${task.recipientLabel} — balance ${format(state.availableBalance)}, spent ${format(state.spentThisPeriod)} this period.`,
+      text: `${task.recipientLabel}: balance ${format(state.availableBalance)}, spent ${format(state.spentThisPeriod)} this period.`,
     });
 
     const decision = await brain.decide(task, state);
@@ -124,7 +124,7 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRunResult
     if (!verdict.compliant) {
       // The refusal is enforced outside the model: whatever the agent decided,
       // the transfer does not happen.
-      await emit({ kind: "refused", text: `Blocked by spend policy — ${verdict.reason}` });
+      await emit({ kind: "refused", text: `Blocked by spend policy: ${verdict.reason}` });
       refused.push(decision);
       continue;
     }

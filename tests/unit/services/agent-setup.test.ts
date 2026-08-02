@@ -4,8 +4,8 @@ import {
   toPolicyInitParams,
   toSpendPolicy,
   validateAgentDraft,
-  type AgentDraftDTO,
 } from "@services/agent-setup";
+import type { AgentDraftDTO } from "@dto/agent.dto";
 
 function draft(overrides: Partial<AgentDraftDTO> = {}): AgentDraftDTO {
   return {

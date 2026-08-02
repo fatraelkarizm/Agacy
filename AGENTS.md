@@ -3,7 +3,7 @@
 Entry-point instructions for any coding agent working in this repo (Claude Code, Codex, Cursor, or otherwise). Read this before making changes.
 
 ## What this project is
-Agacy — Agentic Privacy for AI Agents. A confidential AI agent wallet on Solana. See `docs/PRD.md` for the full product spec, `docs/FEATURES.md` for current build status, `docs/INFRASTRUCTURE.md` for the stack, and `docs/ARCHITECTURE.md` for code-structure rules — **read `docs/ARCHITECTURE.md` before writing any code in this repo, its layering/DTO rules are non-negotiable.**
+Agacy — Agentic Privacy for AI Agents. A confidential AI agent wallet on Solana. See `docs/PRD.md` for the full product spec, `docs/FEATURES.md` for current build status, `docs/INFRASTRUCTURE.md` for the stack, `docs/PRIVACY_ARCHITECTURE.md` for the parent-owned shielded target, and `docs/ARCHITECTURE.md` for code-structure rules — **read `docs/ARCHITECTURE.md` before writing any code in this repo, its layering/DTO rules are non-negotiable.**
 
 ## Installed skills
 This repo has agent skills installed under `.agents/skills/` (installed via `npx skills add`, universal across Claude Code/Codex/Cursor/etc.). Use them proactively when relevant, don't wait to be asked by name:
@@ -36,10 +36,16 @@ Ponytail forbids *unrequested* abstraction ("no interface with one implementatio
 1. Data layer, service/business-logic layer, and presentation layer stay separate — no Solana RPC or decryption calls inside UI components, no business rules inside data-fetching code.
 2. Cross-layer data only moves as DTOs (`/server/dto`), never raw SDK types.
 3. `PublicTransactionDTO` and `AuthorizedTransactionDTO` are distinct types — never merge them into one object with a "hide this" flag. The public/private boundary must be enforced by the type system, not by UI logic remembering to hide a field.
+4. Keep contracts out of logic modules: shared interfaces/types/DTOs live in `/server/dto`,
+   integration-only types in `/server/types`, and runtime validation schemas in `/server/schema`.
+   Data, service, and agent logic import these contracts; component-local prop types may stay local.
 
 ## What NOT to do
 - Do not copy code from `IsSlashy/Protocol-01` or any other proprietary/no-license repo — see `docs/references/03-competitive-landscape.md` for why Agacy's differentiation depends on this being original work.
-- Do not add identity/KYA/accountability features — out of scope, see `docs/FEATURES.md`.
+- Do not add a public identity, reputation, or KYA registry — out of Stage 1 scope, see
+  `docs/FEATURES.md`. Private ownership attestation is a distinct future privacy primitive defined
+  in `docs/PRIVACY_ARCHITECTURE.md`; do not implement it before its shielded-state and key-custody
+  decisions are resolved.
 - Do not commit `docs/` to the public GitHub repo — it's gitignored intentionally (planning docs stay local).
 
 ## Where to look for context

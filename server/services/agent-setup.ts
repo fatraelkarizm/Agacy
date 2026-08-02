@@ -1,4 +1,10 @@
-import type { SpendPolicyDTO } from "../dto/agent.dto";
+import type {
+  AgentDraftDTO,
+  AgentDraftValidationIssueDTO,
+  AgentPurpose,
+  PolicyInitParamsDTO,
+  SpendPolicyDTO,
+} from "../dto/agent.dto";
 
 /**
  * Turning what an owner wants into a policy the chain can enforce.
@@ -9,27 +15,6 @@ import type { SpendPolicyDTO } from "../dto/agent.dto";
  * module only translates and validates; enforcement lives in the on-chain
  * program.
  */
-
-export type AgentPurpose = "subscriptions" | "trading" | "procurement" | "custom";
-
-export type Visibility = "confidential" | "public";
-
-export interface AgentDraftDTO {
-  readonly name: string;
-  readonly purpose: AgentPurpose;
-  /** Max per single transfer, in whole tokens as typed by the owner. */
-  readonly maxPerTransfer: number;
-  /** Max across the whole period, in whole tokens. */
-  readonly maxPerPeriod: number;
-  readonly periodDays: number;
-  readonly allowedRecipients: readonly string[];
-  readonly visibility: Visibility;
-}
-
-export interface ValidationIssue {
-  readonly field: keyof AgentDraftDTO;
-  readonly message: string;
-}
 
 /** Sensible starting points per purpose, so the owner edits rather than invents. */
 export const PURPOSE_PRESETS: Record<AgentPurpose, Omit<AgentDraftDTO, "name" | "purpose">> = {
@@ -65,8 +50,8 @@ export const PURPOSE_PRESETS: Record<AgentPurpose, Omit<AgentDraftDTO, "name" | 
 
 const DECIMALS = 6;
 
-export function validateAgentDraft(draft: AgentDraftDTO): readonly ValidationIssue[] {
-  const issues: ValidationIssue[] = [];
+export function validateAgentDraft(draft: AgentDraftDTO): readonly AgentDraftValidationIssueDTO[] {
+  const issues: AgentDraftValidationIssueDTO[] = [];
 
   if (draft.name.trim().length === 0) {
     issues.push({ field: "name", message: "Give the agent a name so you can tell it apart later." });
@@ -92,18 +77,11 @@ export function validateAgentDraft(draft: AgentDraftDTO): readonly ValidationIss
   return issues;
 }
 
-export interface PolicyInitParams {
-  readonly maxPerTransfer: bigint;
-  readonly maxPerPeriod: bigint;
-  readonly periodSeconds: bigint;
-  readonly allowNonConfidentialCredits: boolean;
-}
-
 /**
  * Convert a validated draft into the exact values the on-chain program stores.
  * Whole tokens become base units here, once, rather than at every call site.
  */
-export function toPolicyInitParams(draft: AgentDraftDTO): PolicyInitParams {
+export function toPolicyInitParams(draft: AgentDraftDTO): PolicyInitParamsDTO {
   const issues = validateAgentDraft(draft);
   if (issues.length > 0) {
     throw new Error(`Cannot build a policy from an invalid draft: ${issues[0]!.message}`);

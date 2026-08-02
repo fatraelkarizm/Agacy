@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import Image from "next/image";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
-import type { SpendPolicyDTO } from "../server/dto/agent.dto";
+import type { AgentDraftDTO, SpendPolicyDTO } from "../server/dto/agent.dto";
+import type { WalletConnectionDTO } from "../server/dto/wallet.dto";
 import { ciphertextPreview, formatTokens } from "../server/services/demo-scenario";
 import devnetProof from "../server/data/devnet-proof.json";
 import { AgentSetup } from "./AgentSetup";
-import { toSpendPolicy, type AgentDraftDTO } from "../server/services/agent-setup";
+import { WalletGate } from "./WalletGate";
+import { toSpendPolicy } from "../server/services/agent-setup";
 
 /**
  * The demo is a guided walkthrough rather than one long page: you define an
@@ -15,18 +18,19 @@ import { toSpendPolicy, type AgentDraftDTO } from "../server/services/agent-setu
  * competing for the same screen.
  */
 
-type Stage = "intro" | "setup" | "run" | "proof";
+type Stage = "intro" | "connect" | "setup" | "run" | "proof";
 
 const STAGES: readonly { id: Stage; label: string }[] = [
   { id: "intro", label: "Overview" },
-  { id: "setup", label: "1 · Create agent" },
-  { id: "run", label: "2 · Watch it run" },
-  { id: "proof", label: "3 · Verify on-chain" },
+  { id: "connect", label: "Connect wallet" },
+  { id: "setup", label: "Create agent" },
+  { id: "run", label: "Run agent" },
+  { id: "proof", label: "Verify proof" },
 ];
 
 const TASKS: readonly AgentTask[] = [
   {
-    prompt: "Monthly API subscription came due — renewing at the usual rate.",
+    prompt: "Monthly API subscription came due, renewing at the usual rate.",
     amount: 4_200_000n,
     recipient: "Sub1er4kQmVnH8dGpXwYzR3tNc5bVfJ2sLmQ9pDhK",
     recipientLabel: "API subscription",
@@ -55,6 +59,7 @@ interface Executed {
 
 export default function Home() {
   const [stage, setStage] = useState<Stage>("intro");
+  const [ownerWallet, setOwnerWallet] = useState<WalletConnectionDTO | null>(null);
   const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
   const [policy, setPolicy] = useState<SpendPolicyDTO | null>(null);
 
@@ -107,36 +112,71 @@ export default function Home() {
     <>
       <nav className="nav">
         <div className="nav-inner">
-          <div className="brand">
+          <button className="brand" onClick={() => setStage("intro")} aria-label="Agacy home">
             <span className="brand-mark" />
-            Agacy.
-          </div>
+            Agacy
+          </button>
           <div className="nav-steps">
             {STAGES.map((s) => (
               <button
                 key={s.id}
                 className={stage === s.id ? "nav-step active" : "nav-step"}
                 onClick={() => setStage(s.id)}
-                disabled={s.id !== "intro" && s.id !== "setup" && !agent}
+                disabled={(s.id === "setup" && !ownerWallet) || (s.id === "run" && !agent)}
               >
                 {s.label}
               </button>
             ))}
           </div>
+          <div className="nav-actions">
+            <a href="https://github.com/fatraelkarizm/Agacy" target="_blank" rel="noreferrer">
+              GitHub
+            </a>
+            <button className="primary nav-launch" onClick={() => setStage("connect")}>
+              {ownerWallet ? shortAddress(ownerWallet.address) : "Launch demo"}
+            </button>
+          </div>
         </div>
       </nav>
 
-      {stage === "intro" && <Intro onStart={() => setStage("setup")} />}
+      {stage === "intro" && (
+        <Intro onStart={() => setStage("connect")} onProof={() => setStage("proof")} />
+      )}
+
+      {stage === "connect" && (
+        <div className="wrap step-page wallet-page">
+          <div className="step-head">
+            <div className="step-index">Owner wallet</div>
+            <h2>Connect before creating an agent.</h2>
+            <p className="section-sub">
+              Your wallet remains the root authority for policy, recovery, and revocation. The
+              agent receives separate scoped permission later.
+            </p>
+          </div>
+          <WalletGate
+            onConnected={(wallet) => {
+              setOwnerWallet(wallet);
+              setStage("setup");
+            }}
+          />
+        </div>
+      )}
 
       {stage === "setup" && (
         <div className="wrap step-page">
           <div className="step-head">
-            <div className="step-index">Step 1 of 3</div>
+            <div className="step-index">Policy setup</div>
             <h2>Create your agent.</h2>
             <p className="section-sub">
-              You define what it may do, once. From then on the limits live in an account on-chain —
-              not in a prompt the agent could be talked out of.
+              You define what it may do once. The limits then live in an account on-chain, not in a
+              prompt the agent could be talked out of.
             </p>
+            {ownerWallet && (
+              <p className="connected-owner">
+                <span aria-hidden="true" /> {shortAddress(ownerWallet.address)} connected via{" "}
+                {ownerWallet.provider}
+              </p>
+            )}
           </div>
           <AgentSetup
             onCreate={(draft) => {
@@ -152,7 +192,7 @@ export default function Home() {
       {stage === "run" && policy && agent && (
         <div className="wrap step-page">
           <div className="step-head">
-            <div className="step-index">Step 2 of 3</div>
+            <div className="step-index">Agent run</div>
             <h2>Watch {agent.name} work.</h2>
             <p className="section-sub">
               A 250 USDC budget under the limits you just set: max{" "}
@@ -164,7 +204,7 @@ export default function Home() {
 
           <div className="controls">
             <button className="primary" onClick={run} disabled={running}>
-              {running ? "Agent running…" : done ? "Run again" : "Start agent"}
+              {running ? "Agent running..." : done ? "Run again" : "Start agent"}
             </button>
             <button onClick={reset} disabled={running || steps.length === 0}>
               Reset
@@ -174,13 +214,13 @@ export default function Home() {
             </button>
             {done && (
               <button className="primary" onClick={() => setStage("proof")}>
-                See the on-chain proof →
+                See on-chain proof
               </button>
             )}
             <span className="hint">
               {steps.length === 0
                 ? "Idle."
-                : `${executed.length} paid · ${formatTokens(balance)} USDC left`}
+                : `${executed.length} paid | ${formatTokens(balance)} USDC left`}
             </span>
           </div>
 
@@ -198,7 +238,7 @@ export default function Home() {
 
       <footer className="foot">
         <div className="wrap">
-          The blocked payment is not the model changing its mind — the agent still proposes it. The
+          The blocked payment is not the model changing its mind. The agent still proposes it. The
           spend policy is enforced outside the model, so a prompt-injected or malfunctioning agent
           cannot talk its way past it. Amounts are hidden by Solana&apos;s native Token-2022
           confidential transfers.
@@ -208,53 +248,185 @@ export default function Home() {
   );
 }
 
-function Intro({ onStart }: { onStart: () => void }) {
+function shortAddress(address: string): string {
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function Intro({ onStart, onProof }: { onStart: () => void; onProof: () => void }) {
   return (
-    <header className="wrap hero">
-      <span className="pill">
-        <span className="pill-badge">Live on devnet</span>
-        <span className="pill-text">Token-2022 confidential transfers</span>
-      </span>
+    <main className="landing">
+      <section className="hero">
+        <div className="wrap hero-grid">
+          <div className="hero-copy">
+            <p className="hero-eyebrow">Confidential agent wallet on Solana</p>
+            <h1>
+              <span className="hero-line">Autonomous money.</span>
+              <span className="accent hero-line">Private by default.</span>
+            </h1>
+            <p className="lede">
+              Agacy lets AI agents transact on Solana while balances, amounts, and policies stay
+              encrypted on-chain.
+            </p>
+            <div className="hero-cta">
+              <button className="primary" onClick={onStart}>
+                Launch demo
+              </button>
+              <button className="text-button" onClick={onProof}>
+                View proof <span aria-hidden="true">↗</span>
+              </button>
+            </div>
+          </div>
 
-      <h1>
-        <span className="accent">Agacy</span> keeps your AI agent&apos;s spending unreadable
-      </h1>
+          <HeroVideo />
 
-      <p className="lede">
-        2.3 million AI agents already hold wallets and transact on their own — and every amount,
-        balance, and counterparty is permanently public. Attackers now pick targets by reading
-        balances. Agacy routes an agent&apos;s payments through Solana&apos;s confidential
-        transfers: provably valid, unreadable amounts, with spend limits enforced on-chain.
-      </p>
+          <section className="hero-proof" aria-label="Agacy privacy proof">
+            <div className="proof-public">
+              <p className="proof-kicker">Public view</p>
+              <h2>Confirmed, not exposed.</h2>
+              <p>Anyone can verify the transaction. The amount and resulting balance stay hidden.</p>
+              <code>amount: ••••••</code>
+            </div>
 
-      <div className="hero-cta">
-        <button className="primary" onClick={onStart}>
-          Try the walkthrough
-        </button>
-        <button
-          onClick={() =>
-            window.open("https://github.com/fatraelkarizm/Agacy", "_blank", "noreferrer")
-          }
-        >
-          View the code
-        </button>
-      </div>
+            <div className="proof-authorized">
+              <p className="proof-kicker">Authorized view</p>
+              <p className="owner-amount">12.5 USDC</p>
+              <p>Owner-only detail and agent reasoning.</p>
+            </div>
 
-      <div className="stats">
-        <StatCard value="2.3M" label="AI agents transacting on-chain today" />
-        <StatCard value="165M" label="agent payments processed via x402" />
-        <StatCard value="+207%" label="jump in phishing losses as attackers began targeting visible balances" />
-        <StatCard value="92" label="tests passing across the crypto, policy, and agent layers" />
-      </div>
-    </header>
+            <div className="proof-rail" aria-label="Verified technology">
+              <div>
+                <strong>Token-2022</strong>
+                <span>Confidential transfers</span>
+              </div>
+              <div>
+                <strong>ZK proofs</strong>
+                <span>Protocol validation</span>
+              </div>
+              <div>
+                <strong>Devnet verified</strong>
+                <span>Real transaction</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section className="landing-section exposure-section">
+        <div className="wrap exposure-grid">
+          <div className="section-copy">
+            <h2>A public ledger becomes an intelligence feed.</h2>
+            <p>
+              Continuous agent activity exposes balances, spending patterns, and business
+              relationships to anyone watching the chain.
+            </p>
+          </div>
+          <dl className="exposure-list">
+            <div>
+              <dt>Personal wallets</dt>
+              <dd>Visible balances make owners easier to profile and target.</dd>
+            </div>
+            <div>
+              <dt>Business agents</dt>
+              <dd>Transaction history can reveal suppliers, revenue signals, and strategy.</dd>
+            </div>
+            <div>
+              <dt>Always-on activity</dt>
+              <dd>Autonomous agents create a continuous stream of searchable financial data.</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section className="landing-section boundary-section">
+        <div className="wrap boundary-wrap">
+          <div className="section-copy">
+            <h2>Autonomy needs a boundary outside the model.</h2>
+            <p>
+              The agent may propose a payment. Agacy checks policy before funds move, so a prompt
+              cannot negotiate past the account limits.
+            </p>
+          </div>
+          <ol className="agent-sequence" aria-label="Agacy agent execution flow">
+            <li><strong>Observe</strong><span>Read the task</span></li>
+            <li><strong>Reason</strong><span>Choose an action</span></li>
+            <li><strong>Decide</strong><span>Propose payment</span></li>
+            <li><strong>Policy check</strong><span>Enforce limits</span></li>
+            <li><strong>Execute</strong><span>Transfer privately</span></li>
+          </ol>
+        </div>
+      </section>
+
+      <section className="landing-section stack-section">
+        <div className="wrap privacy-bento">
+          <div className="bento-visual">
+            <Image
+              src="/agacy-privacy-primitives-3d.png"
+              alt="Three-dimensional encrypted vault, zero-knowledge prism, and policy gate"
+              fill
+              sizes="(max-width: 760px) 100vw, 58vw"
+            />
+          </div>
+          <div className="bento-intro">
+            <p className="proof-kicker">Solana-native privacy</p>
+            <h2>Privacy where value moves.</h2>
+            <p>
+              Agacy uses protocol-level primitives instead of routing agents through a separate
+              privacy network.
+            </p>
+          </div>
+          <article className="bento-detail bento-token">
+            <strong>Token-2022</strong>
+            <span>Encrypted balances and transfer amounts stay native to Solana.</span>
+          </article>
+          <article className="bento-detail bento-zk">
+            <strong>ZK proofs</strong>
+            <span>Transfers prove validity without exposing their size.</span>
+          </article>
+          <article className="bento-detail bento-policy">
+            <strong>Policy gate</strong>
+            <span>Spend limits live outside the agent prompt.</span>
+          </article>
+        </div>
+      </section>
+
+      <section className="landing-cta">
+        <div className="wrap landing-cta-inner">
+          <h2>Let the agent act.<br />Keep the ledger quiet.</h2>
+          <button className="primary" onClick={onStart}>Launch demo</button>
+        </div>
+      </section>
+    </main>
   );
 }
 
-function StatCard({ value, label }: { value: string; label: string }) {
+function HeroVideo() {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const syncPlayback = () => {
+      if (motionPreference.matches) videoRef.current?.pause();
+      else void videoRef.current?.play().catch(() => undefined);
+    };
+
+    syncPlayback();
+    motionPreference.addEventListener("change", syncPlayback);
+    return () => motionPreference.removeEventListener("change", syncPlayback);
+  }, []);
+
   return (
-    <div className="stat-card">
-      <div className="stat-value">{value}</div>
-      <div className="stat-label">{label}</div>
+    <div className="hero-media">
+      <video
+        ref={videoRef}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        poster="/agacy-encrypted-core.png"
+        aria-label="Encrypted transaction paths moving through a protected vault core"
+      >
+        <source src="/agacy-private-core.mp4" type="video/mp4" />
+      </video>
     </div>
   );
 }
@@ -263,8 +435,8 @@ function Proof() {
   return (
     <div className="wrap step-page">
       <div className="step-head">
-        <div className="step-index">Step 3 of 3</div>
-        <h2>Not a mockup — verified on devnet.</h2>
+        <div className="step-index">On-chain evidence</div>
+        <h2>Not a mockup. Verified on devnet.</h2>
         <p className="section-sub">
           Everything above runs for real. Below is an actual confidential transfer this codebase
           executed on Solana devnet: the transaction is public and confirmed, and the transferred
@@ -280,7 +452,7 @@ function Proof() {
         <div className="proof-item">
           <div className="proof-label">Amount readable on-chain</div>
           <div className="proof-verdict">
-            {devnetProof.amountFoundInRecipientAccountData ? "yes" : "no — encrypted"}
+            {devnetProof.amountFoundInRecipientAccountData ? "yes" : "no, encrypted"}
           </div>
         </div>
       </div>
@@ -406,7 +578,7 @@ function ConfidentialPanel({
               <span className="row-val hidden">unreadable</span>
             </div>
             <div className="verdict private">
-              Every transaction is real, confirmed, and verifiable — the chain proved each one valid
+              Every transaction is real, confirmed, and verifiable. The chain proved each one valid
               without learning the amount. There is no balance here to target.
             </div>
           </>

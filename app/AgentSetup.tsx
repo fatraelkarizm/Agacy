@@ -5,9 +5,8 @@ import {
   PURPOSE_PRESETS,
   toPolicyInitParams,
   validateAgentDraft,
-  type AgentDraftDTO,
-  type AgentPurpose,
 } from "../server/services/agent-setup";
+import type { AgentDraftDTO, AgentPurpose } from "../server/dto/agent.dto";
 
 const PURPOSE_LABELS: Record<AgentPurpose, { title: string; blurb: string }> = {
   subscriptions: { title: "Subscriptions", blurb: "Recurring services and renewals" },
@@ -106,7 +105,7 @@ export function AgentSetup({ onCreate }: AgentSetupProps) {
 
       <div className="step-footer">
         <button className="primary" disabled={issues.length > 0} onClick={() => onCreate(draft)}>
-          Create agent →
+          Create agent
         </button>
         {issues.length === 0 && <PolicyPreview draft={draft} />}
       </div>
@@ -120,7 +119,7 @@ function PolicyPreview({ draft }: { draft: AgentDraftDTO }) {
     <p className="hint">
       Stored on-chain as {params.maxPerTransfer.toString()} / {params.maxPerPeriod.toString()} base
       units over {params.periodSeconds.toString()}s
-      {params.allowNonConfidentialCredits ? " · public credits allowed" : " · confidential only"}
+      {params.allowNonConfidentialCredits ? " | public credits allowed" : " | confidential only"}
     </p>
   );
 }
