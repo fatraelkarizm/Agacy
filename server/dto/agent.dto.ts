@@ -55,3 +55,10 @@ export interface SpendPolicyDTO {
   /** Recipients the agent is allowed to send to. Empty means "any". */
   readonly allowedRecipients: readonly string[];
 }
+
+/** One payment emitted by the local agent run before it is mapped to transaction views. */
+export interface AgentExecutionDTO {
+  readonly amount: bigint;
+  readonly recipient: string;
+  readonly reasoning: string;
+}

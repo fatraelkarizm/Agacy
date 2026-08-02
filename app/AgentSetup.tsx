@@ -1,5 +1,6 @@
 "use client";
 
+import { Broadcast, Info, ShieldCheck, Wallet } from "@phosphor-icons/react";
 import {
   PURPOSE_PRESETS,
   toPolicyInitParams,
@@ -91,7 +92,9 @@ export function AgentSetup({
         ))}
       </nav>
 
-      <div className="onboarding-body">
+      <div className="onboarding-content-grid">
+        <div className="onboarding-main">
+          <div className="onboarding-body">
         {step === "define" && (
           <div className="onboarding-panel">
             <PanelHeading
@@ -204,28 +207,54 @@ export function AgentSetup({
             <PolicyPreview draft={draft} />
           </div>
         )}
-      </div>
+          </div>
 
-      <div className="step-footer onboarding-actions">
-        <button onClick={back} disabled={stepIndex === 0}>
-          Back
-        </button>
-        <span className="hint">
-          Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
-        </span>
-        {step !== "review" ? (
-          <button
-            className="primary"
-            disabled={(step === "define" && !defineValid) || (step === "policy" && !policyValid)}
-            onClick={next}
-          >
-            Continue
-          </button>
-        ) : (
-          <button className="primary" disabled={issues.length > 0} onClick={() => onCreate(draft)}>
-            Create agent
-          </button>
-        )}
+          <div className="step-footer onboarding-actions">
+            <button onClick={back} disabled={stepIndex === 0}>
+              Back
+            </button>
+            <span className="hint">
+              Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
+            </span>
+            {step !== "review" ? (
+              <button
+                className="primary"
+                disabled={(step === "define" && !defineValid) || (step === "policy" && !policyValid)}
+                onClick={next}
+              >
+                Continue
+              </button>
+            ) : (
+              <button className="primary" disabled={issues.length > 0} onClick={() => onCreate(draft)}>
+                Create agent
+              </button>
+            )}
+          </div>
+        </div>
+
+        <aside className="onboarding-owner-rail">
+          <header>
+            <ShieldCheck aria-hidden="true" size={26} weight="duotone" />
+            <h3>Owner authority</h3>
+          </header>
+          <p className="dashboard-label">Connected wallet</p>
+          <div className="onboarding-owner-value">
+            <Wallet aria-hidden="true" size={18} weight="duotone" />
+            <code>{shortAddress(ownerWallet.address)}</code>
+          </div>
+          <p className="dashboard-label">Network</p>
+          <div className="onboarding-owner-network">
+            <Broadcast aria-hidden="true" size={18} weight="duotone" />
+            <span>{ownerWallet.network}</span>
+          </div>
+          <div className="onboarding-owner-note">
+            <Info aria-hidden="true" size={19} weight="duotone" />
+            <p>
+              Connecting proves ownership. It does not give the agent permission to spend. The
+              next steps define that scope.
+            </p>
+          </div>
+        </aside>
       </div>
     </section>
   );

@@ -18,13 +18,21 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
 import type {
   AgentDraftDTO,
+  AgentExecutionDTO,
   AgentOnboardingStep,
   SpendPolicyDTO,
 } from "../server/dto/agent.dto";
+import type { DashboardSection } from "../server/dto/dashboard.dto";
+import { toPublicView } from "../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../server/dto/wallet.dto";
-import { ciphertextPreview, formatTokens } from "../server/services/demo-scenario";
+import {
+  buildAuthorizedDemoHistory,
+  ciphertextPreview,
+  formatTokens,
+} from "../server/services/demo-scenario";
 import devnetProof from "../server/data/devnet-proof.json";
 import { AgentSetup } from "./AgentSetup";
+import { Dashboard } from "./Dashboard";
 import { WalletGate } from "./WalletGate";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../server/services/agent-setup";
 import {
@@ -40,7 +48,7 @@ import {
  * competing for the same screen.
  */
 
-type Stage = "intro" | "connect" | "setup" | "run" | "proof";
+type Stage = "intro" | "connect" | "dashboard" | "proof";
 
 const LANDING_LINKS = [
   { id: "product", label: "Product" },
@@ -72,14 +80,9 @@ const TASKS: readonly AgentTask[] = [
 
 const INITIAL_BALANCE = 250_000_000n;
 
-interface Executed {
-  readonly amount: bigint;
-  readonly recipient: string;
-  readonly reasoning: string;
-}
-
 export default function Home() {
   const [stage, setStage] = useState<Stage>("intro");
+  const [dashboardSection, setDashboardSection] = useState<DashboardSection>("overview");
   const [ownerWallet, setOwnerWallet] = useState<WalletConnectionDTO | null>(null);
   const [restoringWallet, setRestoringWallet] = useState(true);
   const [setupDraft, setSetupDraft] = useState<AgentDraftDTO>({
@@ -92,7 +95,7 @@ export default function Home() {
   const [policy, setPolicy] = useState<SpendPolicyDTO | null>(null);
 
   const [steps, setSteps] = useState<AgentStep[]>([]);
-  const [executed, setExecuted] = useState<Executed[]>([]);
+  const [executed, setExecuted] = useState<AgentExecutionDTO[]>([]);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [ownerView, setOwnerView] = useState(false);
@@ -139,6 +142,15 @@ export default function Home() {
     }
   }, [invalidateWallet, ownerWallet]);
 
+  const openDashboard = useCallback((section: DashboardSection = "overview") => {
+    if (!ownerWallet) {
+      setStage("connect");
+      return;
+    }
+    setDashboardSection(section);
+    setStage("dashboard");
+  }, [ownerWallet]);
+
   const showLandingSection = useCallback((sectionId: string) => {
     setStage("intro");
     requestAnimationFrame(() => {
@@ -176,53 +188,62 @@ export default function Home() {
 
   const spent = executed.reduce((sum, e) => sum + e.amount, 0n);
   const balance = INITIAL_BALANCE - spent;
+  const authorizedTransactions = buildAuthorizedDemoHistory(executed, INITIAL_BALANCE);
+  const publicTransactions = authorizedTransactions.map(toPublicView);
+  const currentTask = steps.at(-1)?.text ?? "Ready for a task";
 
   return (
     <>
-      <nav className="nav">
-        <div className="nav-inner">
-          <button className="brand" onClick={() => showLandingSection("product")} aria-label="Agacy home">
-            <span className="brand-mark" />
-            Agacy
-          </button>
-          <div className="nav-links" aria-label="Landing page sections">
-            {LANDING_LINKS.map((link) => (
-              <button key={link.id} onClick={() => showLandingSection(link.id)}>
-                {link.label}
-              </button>
-            ))}
-            <a href="/docs">
-              <FileText aria-hidden="true" size={14} weight="duotone" />
-              Docs
-            </a>
-          </div>
-          <div className="nav-actions">
-            {ownerWallet && (
-              <button className="nav-disconnect" onClick={() => void disconnect()}>
-                Disconnect
-              </button>
-            )}
+      {stage !== "dashboard" && (
+        <nav className="nav">
+          <div className="nav-inner">
             <button
-              className="primary nav-launch"
-              onClick={() => setStage(ownerWallet ? "setup" : "connect")}
-              disabled={restoringWallet}
+              className="brand"
+              onClick={() => showLandingSection("product")}
+              aria-label="Agacy home"
             >
-              {!restoringWallet && !ownerWallet && (
-                <Wallet aria-hidden="true" size={17} weight="duotone" />
-              )}
-              {restoringWallet
-                ? "Checking wallet..."
-                : ownerWallet
-                  ? shortAddress(ownerWallet.address)
-                  : "Connect wallet"}
+              <span className="brand-mark" />
+              Agacy
             </button>
+            <div className="nav-links" aria-label="Landing page sections">
+              {LANDING_LINKS.map((link) => (
+                <button key={link.id} onClick={() => showLandingSection(link.id)}>
+                  {link.label}
+                </button>
+              ))}
+              <a href="/docs">
+                <FileText aria-hidden="true" size={14} weight="duotone" />
+                Docs
+              </a>
+            </div>
+            <div className="nav-actions">
+              {ownerWallet && (
+                <button className="nav-disconnect" onClick={() => void disconnect()}>
+                  Disconnect
+                </button>
+              )}
+              <button
+                className="primary nav-launch"
+                onClick={() => openDashboard("overview")}
+                disabled={restoringWallet}
+              >
+                {!restoringWallet && !ownerWallet && (
+                  <Wallet aria-hidden="true" size={17} weight="duotone" />
+                )}
+                {restoringWallet
+                  ? "Checking wallet..."
+                  : ownerWallet
+                    ? shortAddress(ownerWallet.address)
+                    : "Connect wallet"}
+              </button>
+            </div>
           </div>
-        </div>
-      </nav>
+        </nav>
+      )}
 
       {stage === "intro" && (
         <Intro
-          onStart={() => setStage(ownerWallet ? "setup" : "connect")}
+          onStart={() => openDashboard("overview")}
           onProof={() => setStage("proof")}
         />
       )}
@@ -240,99 +261,104 @@ export default function Home() {
           <WalletGate
             onConnected={(wallet) => {
               setOwnerWallet(wallet);
-              setStage("setup");
+              setDashboardSection("overview");
+              setStage("dashboard");
             }}
           />
         </div>
       )}
 
-      {stage === "setup" && ownerWallet && (
-        <div className="wrap step-page">
-          <div className="step-head">
-            <div className="step-index">Policy setup</div>
-            <h2>Create your agent.</h2>
-            <p className="section-sub">
-              You define what it may do once. The limits then live in an account on-chain, not in a
-              prompt the agent could be talked out of.
-            </p>
-            {ownerWallet && (
-              <p className="connected-owner">
-                <span aria-hidden="true" /> {shortAddress(ownerWallet.address)} connected via{" "}
-                {ownerWallet.provider} on {ownerWallet.network}
-              </p>
-            )}
-          </div>
-          <AgentSetup
-            draft={setupDraft}
-            ownerWallet={ownerWallet}
-            step={onboardingStep}
-            onDraftChange={setSetupDraft}
-            onStepChange={setOnboardingStep}
-            onCreate={(draft) => {
-              setAgent(draft);
-              setPolicy(toSpendPolicy(draft));
-              reset();
-              setStage("run");
-            }}
-          />
-        </div>
-      )}
+      {stage === "dashboard" && ownerWallet && (
+        <Dashboard
+          section={dashboardSection}
+          ownerWallet={ownerWallet}
+          agent={agent}
+          policy={policy}
+          publicTransactions={publicTransactions}
+          authorizedTransactions={authorizedTransactions}
+          balance={balance}
+          operationalStatus={running ? "active" : "idle"}
+          currentTask={currentTask}
+          ownerView={ownerView}
+          onNavigate={setDashboardSection}
+          onNewAgent={() => setDashboardSection("onboarding")}
+          onToggleOwnerView={() => setOwnerView((visible) => !visible)}
+          onDisconnect={() => void disconnect()}
+          onProof={() => setStage("proof")}
+          onLanding={() => showLandingSection("product")}
+        >
+          {dashboardSection === "onboarding" ? (
+            <AgentSetup
+              draft={setupDraft}
+              ownerWallet={ownerWallet}
+              step={onboardingStep}
+              onDraftChange={setSetupDraft}
+              onStepChange={setOnboardingStep}
+              onCreate={(draft) => {
+                setAgent(draft);
+                setPolicy(toSpendPolicy(draft));
+                reset();
+                setDashboardSection("run");
+              }}
+            />
+          ) : dashboardSection === "run" && policy && agent ? (
+            <div className="dashboard-run">
+              <div className="dashboard-workspace-intro">
+                <div>
+                  <h2>Watch {agent.name} work.</h2>
+                  <p>
+                    The agent proposes each payment. The policy check runs outside the model before
+                    value moves.
+                  </p>
+                </div>
+                <span className="hint">
+                  Max {formatTokens(policy.maxPerTransfer)} USDC per transfer
+                </span>
+              </div>
 
-      {stage === "run" && policy && agent && (
-        <div className="wrap step-page">
-          <div className="step-head">
-            <div className="step-index">Agent run</div>
-            <h2>Watch {agent.name} work.</h2>
-            <p className="section-sub">
-              A 250 USDC budget under the limits you just set: max{" "}
-              {formatTokens(policy.maxPerTransfer)} per transfer, {formatTokens(policy.maxPerPeriod)}{" "}
-              per period. It reasons about each task, proposes a payment, and the policy is checked{" "}
-              <em>outside the model</em> before anything moves.
-            </p>
-          </div>
+              <div className="controls">
+                <button className="primary" onClick={run} disabled={running}>
+                  {running ? "Agent running..." : done ? "Run again" : "Start agent"}
+                </button>
+                <button onClick={reset} disabled={running || steps.length === 0}>
+                  Reset
+                </button>
+                <button onClick={() => setOwnerView(!ownerView)} disabled={executed.length === 0}>
+                  {ownerView ? "Hide owner view" : "View as owner"}
+                </button>
+                {done && <button onClick={() => setStage("proof")}>See on-chain proof</button>}
+                <button onClick={() => setDashboardSection("overview")}>Back to overview</button>
+                <span className="hint">
+                  {steps.length === 0
+                    ? "Idle."
+                    : `${executed.length} paid | ${formatTokens(balance)} USDC left`}
+                </span>
+              </div>
 
-          <div className="controls">
-            <button className="primary" onClick={run} disabled={running}>
-              {running ? "Agent running..." : done ? "Run again" : "Start agent"}
-            </button>
-            <button onClick={reset} disabled={running || steps.length === 0}>
-              Reset
-            </button>
-            <button onClick={() => setOwnerView(!ownerView)} disabled={executed.length === 0}>
-              {ownerView ? "Hide owner view" : "View as owner"}
-            </button>
-            {done && (
-              <button className="primary" onClick={() => setStage("proof")}>
-                See on-chain proof
-              </button>
-            )}
-            <span className="hint">
-              {steps.length === 0
-                ? "Idle."
-                : `${executed.length} paid | ${formatTokens(balance)} USDC left`}
-            </span>
-          </div>
-
-          <div className="layout">
-            <AgentConsole steps={steps} running={running} />
-            <div className="panels">
-              <ExposedPanel executed={executed} balance={balance} />
-              <ConfidentialPanel executed={executed} ownerView={ownerView} balance={balance} />
+              <div className="layout">
+                <AgentConsole steps={steps} running={running} />
+                <div className="panels">
+                  <ExposedPanel executed={executed} balance={balance} />
+                  <ConfidentialPanel executed={executed} ownerView={ownerView} balance={balance} />
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          ) : undefined}
+        </Dashboard>
       )}
 
       {stage === "proof" && <Proof />}
 
-      <footer className="foot">
-        <div className="wrap">
-          The blocked payment is not the model changing its mind. The agent still proposes it. The
-          spend policy is enforced outside the model, so a prompt-injected or malfunctioning agent
-          cannot talk its way past it. Amounts are hidden by Solana&apos;s native Token-2022
-          confidential transfers.
-        </div>
-      </footer>
+      {stage !== "dashboard" && (
+        <footer className="foot">
+          <div className="wrap">
+            The blocked payment is not the model changing its mind. The agent still proposes it.
+            The spend policy is enforced outside the model, so a prompt-injected or malfunctioning
+            agent cannot talk its way past it. Amounts are hidden by Solana&apos;s native Token-2022
+            confidential transfers.
+          </div>
+        </footer>
+      )}
     </>
   );
 }
@@ -668,7 +694,7 @@ function AgentConsole({ steps, running }: { steps: AgentStep[]; running: boolean
   );
 }
 
-function ExposedPanel({ executed, balance }: { executed: Executed[]; balance: bigint }) {
+function ExposedPanel({ executed, balance }: { executed: AgentExecutionDTO[]; balance: bigint }) {
   return (
     <section className="card">
       <div className="panel-head">
@@ -711,7 +737,7 @@ function ConfidentialPanel({
   ownerView,
   balance,
 }: {
-  executed: Executed[];
+  executed: AgentExecutionDTO[];
   ownerView: boolean;
   balance: bigint;
 }) {

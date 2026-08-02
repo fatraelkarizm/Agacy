@@ -1,3 +1,4 @@
+import type { AgentExecutionDTO } from "../dto/agent.dto";
 import type { AuthorizedTransactionDTO, PublicTransactionDTO } from "../dto/transaction.dto";
 import { toPublicView } from "../dto/transaction.dto";
 
@@ -100,6 +101,29 @@ export function runScenario(steps: readonly ScenarioStep[] = SCENARIO): Scenario
     publicView: authorized.map(toPublicView),
     authorized,
   };
+}
+
+/** Maps the live local agent trace into the same owner-only DTO used by transaction views. */
+export function buildAuthorizedDemoHistory(
+  executions: readonly AgentExecutionDTO[],
+  startingBalance = STARTING_BALANCE,
+): AuthorizedTransactionDTO[] {
+  let balance = startingBalance;
+  const firstTimestamp = Date.UTC(2026, 7, 2, 9, 15);
+
+  return executions.map((execution, index) => {
+    balance -= execution.amount;
+    return {
+      signature: fakeSignature(index, "runtime"),
+      timestamp: firstTimestamp + index * 60_000,
+      status: "confirmed",
+      confidential: true,
+      amount: execution.amount,
+      counterparty: execution.recipient,
+      resultingBalance: balance,
+      agentReasoning: execution.reasoning,
+    };
+  });
 }
 
 /**
