@@ -3,7 +3,11 @@
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
-import type { AgentDraftDTO, SpendPolicyDTO } from "../server/dto/agent.dto";
+import type {
+  AgentDraftDTO,
+  AgentOnboardingStep,
+  SpendPolicyDTO,
+} from "../server/dto/agent.dto";
 import type { WalletConnectionDTO } from "../server/dto/wallet.dto";
 import { ciphertextPreview, formatTokens } from "../server/services/demo-scenario";
 import devnetProof from "../server/data/devnet-proof.json";
@@ -25,13 +29,12 @@ import {
 
 type Stage = "intro" | "connect" | "setup" | "run" | "proof";
 
-const STAGES: readonly { id: Stage; label: string }[] = [
-  { id: "intro", label: "Overview" },
-  { id: "connect", label: "Connect wallet" },
-  { id: "setup", label: "Create agent" },
-  { id: "run", label: "Run agent" },
-  { id: "proof", label: "Verify proof" },
-];
+const LANDING_LINKS = [
+  { id: "product", label: "Product" },
+  { id: "how-it-works", label: "How it works" },
+  { id: "onboarding", label: "Onboarding" },
+  { id: "privacy-stack", label: "Privacy stack" },
+] as const;
 
 const TASKS: readonly AgentTask[] = [
   {
@@ -71,6 +74,7 @@ export default function Home() {
     purpose: "subscriptions",
     ...PURPOSE_PRESETS.subscriptions,
   });
+  const [onboardingStep, setOnboardingStep] = useState<AgentOnboardingStep>("define");
   const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
   const [policy, setPolicy] = useState<SpendPolicyDTO | null>(null);
 
@@ -122,6 +126,13 @@ export default function Home() {
     }
   }, [invalidateWallet, ownerWallet]);
 
+  const showLandingSection = useCallback((sectionId: string) => {
+    setStage("intro");
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => document.getElementById(sectionId)?.scrollIntoView());
+    });
+  }, []);
+
   const run = useCallback(async () => {
     if (!policy) return;
     reset();
@@ -157,29 +168,19 @@ export default function Home() {
     <>
       <nav className="nav">
         <div className="nav-inner">
-          <button className="brand" onClick={() => setStage("intro")} aria-label="Agacy home">
+          <button className="brand" onClick={() => showLandingSection("product")} aria-label="Agacy home">
             <span className="brand-mark" />
             Agacy
           </button>
-          <div className="nav-steps">
-            {STAGES.map((s) => (
-              <button
-                key={s.id}
-                className={stage === s.id ? "nav-step active" : "nav-step"}
-                onClick={() => setStage(s.id)}
-                disabled={
-                  (s.id === "setup" && !ownerWallet) ||
-                  (s.id === "run" && (!ownerWallet || !agent))
-                }
-              >
-                {s.label}
+          <div className="nav-links" aria-label="Landing page sections">
+            {LANDING_LINKS.map((link) => (
+              <button key={link.id} onClick={() => showLandingSection(link.id)}>
+                {link.label}
               </button>
             ))}
           </div>
           <div className="nav-actions">
-            <a href="https://github.com/fatraelkarizm/Agacy" target="_blank" rel="noreferrer">
-              GitHub
-            </a>
+            <a href="/docs">Docs</a>
             {ownerWallet && (
               <button className="nav-disconnect" onClick={() => void disconnect()}>
                 Disconnect
@@ -194,14 +195,17 @@ export default function Home() {
                 ? "Checking wallet..."
                 : ownerWallet
                   ? shortAddress(ownerWallet.address)
-                  : "Launch demo"}
+                  : "Connect wallet"}
             </button>
           </div>
         </div>
       </nav>
 
       {stage === "intro" && (
-        <Intro onStart={() => setStage("connect")} onProof={() => setStage("proof")} />
+        <Intro
+          onStart={() => setStage(ownerWallet ? "setup" : "connect")}
+          onProof={() => setStage("proof")}
+        />
       )}
 
       {stage === "connect" && (
@@ -223,7 +227,7 @@ export default function Home() {
         </div>
       )}
 
-      {stage === "setup" && (
+      {stage === "setup" && ownerWallet && (
         <div className="wrap step-page">
           <div className="step-head">
             <div className="step-index">Policy setup</div>
@@ -241,7 +245,10 @@ export default function Home() {
           </div>
           <AgentSetup
             draft={setupDraft}
+            ownerWallet={ownerWallet}
+            step={onboardingStep}
             onDraftChange={setSetupDraft}
+            onStepChange={setOnboardingStep}
             onCreate={(draft) => {
               setAgent(draft);
               setPolicy(toSpendPolicy(draft));
@@ -318,7 +325,7 @@ function shortAddress(address: string): string {
 function Intro({ onStart, onProof }: { onStart: () => void; onProof: () => void }) {
   return (
     <main className="landing">
-      <section className="hero">
+      <section className="hero" id="product">
         <div className="wrap hero-grid">
           <div className="hero-copy">
             <p className="hero-eyebrow">Confidential agent wallet on Solana</p>
@@ -400,7 +407,7 @@ function Intro({ onStart, onProof }: { onStart: () => void; onProof: () => void 
         </div>
       </section>
 
-      <section className="landing-section boundary-section">
+      <section className="landing-section boundary-section" id="how-it-works">
         <div className="wrap boundary-wrap">
           <div className="section-copy">
             <h2>Autonomy needs a boundary outside the model.</h2>
@@ -419,7 +426,57 @@ function Intro({ onStart, onProof }: { onStart: () => void; onProof: () => void 
         </div>
       </section>
 
-      <section className="landing-section stack-section">
+      <section className="landing-section onboarding-section" id="onboarding">
+        <div className="wrap onboarding-overview">
+          <div className="section-copy">
+            <p className="proof-kicker">Owner-controlled onboarding</p>
+            <h2>From wallet connection to bounded autonomy.</h2>
+            <p>
+              The owner establishes control first. Agent authority is introduced gradually and
+              reviewed before anything can execute.
+            </p>
+          </div>
+          <ol className="onboarding-journey">
+            <li>
+              <span>01</span>
+              <div>
+                <strong>Connect owner wallet</strong>
+                <p>Phantom or Solflare becomes the root authority.</p>
+              </div>
+            </li>
+            <li>
+              <span>02</span>
+              <div>
+                <strong>Define the agent</strong>
+                <p>Name its job and choose the operating purpose.</p>
+              </div>
+            </li>
+            <li>
+              <span>03</span>
+              <div>
+                <strong>Set spending policy</strong>
+                <p>Cap each transfer and the total period budget.</p>
+              </div>
+            </li>
+            <li>
+              <span>04</span>
+              <div>
+                <strong>Choose privacy access</strong>
+                <p>Keep owner detail separate from public metadata.</p>
+              </div>
+            </li>
+            <li>
+              <span>05</span>
+              <div>
+                <strong>Review and authorize</strong>
+                <p>The owner approves scoped authority before the run.</p>
+              </div>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section className="landing-section stack-section" id="privacy-stack">
         <div className="wrap privacy-bento">
           <div className="bento-visual">
             <Image

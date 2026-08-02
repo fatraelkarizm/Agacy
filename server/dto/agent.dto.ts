@@ -4,6 +4,8 @@ export type AgentPurpose = "subscriptions" | "trading" | "procurement" | "custom
 
 export type AgentVisibility = "confidential" | "public";
 
+export type AgentOnboardingStep = "define" | "policy" | "privacy" | "review";
+
 export interface AgentDraftDTO {
   readonly name: string;
   readonly purpose: AgentPurpose;
