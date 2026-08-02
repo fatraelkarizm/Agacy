@@ -5,8 +5,10 @@ import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
 import type { SpendPolicyDTO } from "../server/dto/agent.dto";
 import { ciphertextPreview, formatTokens } from "../server/services/demo-scenario";
 import devnetProof from "../server/data/devnet-proof.json";
+import { AgentSetup } from "./AgentSetup";
+import type { AgentDraftDTO } from "../server/services/agent-setup";
 
-const POLICY: SpendPolicyDTO = {
+const DEFAULT_POLICY: SpendPolicyDTO = {
   maxPerTransfer: 20_000_000n,
   maxPerPeriod: 50_000_000n,
   allowedRecipients: [],
@@ -47,6 +49,8 @@ export default function Home() {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [ownerView, setOwnerView] = useState(false);
+  const [policy, setPolicy] = useState<SpendPolicyDTO>(DEFAULT_POLICY);
+  const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
   const lastReasoning = useRef("");
 
   const run = useCallback(async () => {
@@ -58,7 +62,7 @@ export default function Home() {
 
     await runAgent({
       tasks: TASKS,
-      policy: POLICY,
+      policy,
       initialState: { availableBalance: INITIAL_BALANCE, spentThisPeriod: 0n },
       onStep: async (step) => {
         if (step.kind === "think") lastReasoning.current = step.text;
@@ -76,7 +80,7 @@ export default function Home() {
 
     setRunning(false);
     setDone(true);
-  }, []);
+  }, [policy]);
 
   const reset = () => {
     setSteps([]);
@@ -117,13 +121,22 @@ export default function Home() {
       </header>
 
       <main className="wrap sim">
+        <AgentSetup
+          onCreate={(draft, created) => {
+            setAgent(draft);
+            setPolicy(created);
+            reset();
+          }}
+        />
+
         <div className="section-head">
-          <h2>Watch the agent work.</h2>
+          <h2>{agent ? `Watch ${agent.name} work.` : "Watch the agent work."}</h2>
           <p className="section-sub">
-            A live agent loop with a 250 USDC budget and an owner-set policy: max 20 per transfer,
-            50 per period. It reasons about each task, proposes a payment, and the policy is checked{" "}
-            <em>outside the model</em> before anything moves. Watch what the two ledgers reveal as
-            it runs.
+            A live agent loop with a 250 USDC budget, running under the limits set above:
+            max {(Number(policy.maxPerTransfer) / 1e6).toLocaleString()} per transfer,{" "}
+            {(Number(policy.maxPerPeriod) / 1e6).toLocaleString()} per period. It reasons about each
+            task, proposes a payment, and the policy is checked <em>outside the model</em> before
+            anything moves.
           </p>
         </div>
 

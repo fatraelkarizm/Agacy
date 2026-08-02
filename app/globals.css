@@ -526,3 +526,128 @@ h1 br {
   font-size: 0.95rem;
   color: var(--private);
 }
+
+/* ---------- agent setup ---------- */
+
+.setup {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  padding: 30px 30px 26px;
+  margin-bottom: 52px;
+}
+
+.setup-head { margin-bottom: 26px; }
+
+.purpose-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.purpose {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 14px 16px;
+  background: var(--surface-raised);
+}
+
+.purpose.selected {
+  border-color: var(--accent);
+  background: rgba(108, 127, 255, 0.09);
+}
+
+.purpose-title { font-weight: 550; font-size: 0.92rem; }
+.purpose-blurb { font-size: 0.78rem; color: var(--text-faint); }
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.field { display: flex; flex-direction: column; gap: 7px; }
+
+.field-label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.field input {
+  font: inherit;
+  font-size: 0.92rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  width: 100%;
+}
+
+.field input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.field-error { font-size: 0.78rem; color: var(--exposed); }
+
+.visibility { margin-bottom: 24px; }
+
+.visibility-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.vis-option {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  text-align: left;
+  padding: 15px 17px;
+  background: var(--surface-raised);
+}
+
+.vis-option.selected {
+  border-color: var(--private);
+  background: rgba(61, 220, 151, 0.07);
+}
+
+.vis-title {
+  font-weight: 550;
+  font-size: 0.92rem;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.vis-badge {
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--private);
+  background: var(--private-dim);
+  padding: 3px 7px;
+  border-radius: 999px;
+}
+
+.vis-blurb { font-size: 0.79rem; color: var(--text-faint); line-height: 1.45; }
+
+.setup-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+}
