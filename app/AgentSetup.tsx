@@ -4,12 +4,10 @@ import { useState } from "react";
 import {
   PURPOSE_PRESETS,
   toPolicyInitParams,
-  toSpendPolicy,
   validateAgentDraft,
   type AgentDraftDTO,
   type AgentPurpose,
 } from "../server/services/agent-setup";
-import type { SpendPolicyDTO } from "../server/dto/agent.dto";
 
 const PURPOSE_LABELS: Record<AgentPurpose, { title: string; blurb: string }> = {
   subscriptions: { title: "Subscriptions", blurb: "Recurring services and renewals" },
@@ -19,7 +17,7 @@ const PURPOSE_LABELS: Record<AgentPurpose, { title: string; blurb: string }> = {
 };
 
 export interface AgentSetupProps {
-  readonly onCreate: (draft: AgentDraftDTO, policy: SpendPolicyDTO) => void;
+  readonly onCreate: (draft: AgentDraftDTO) => void;
 }
 
 export function AgentSetup({ onCreate }: AgentSetupProps) {
@@ -40,15 +38,7 @@ export function AgentSetup({ onCreate }: AgentSetupProps) {
     issues.find((issue) => issue.field === field)?.message;
 
   return (
-    <section className="setup">
-      <div className="setup-head">
-        <h2>Create your agent.</h2>
-        <p className="section-sub">
-          You define what it may do, once. From then on the limits live in an account on-chain —
-          not in a prompt the agent could be talked out of.
-        </p>
-      </div>
-
+    <section className="card setup">
       <div className="purpose-grid">
         {(Object.keys(PURPOSE_LABELS) as AgentPurpose[]).map((purpose) => (
           <button
@@ -114,13 +104,9 @@ export function AgentSetup({ onCreate }: AgentSetupProps) {
         </div>
       </div>
 
-      <div className="setup-footer">
-        <button
-          className="primary"
-          disabled={issues.length > 0}
-          onClick={() => onCreate(draft, toSpendPolicy(draft))}
-        >
-          Create agent
+      <div className="step-footer">
+        <button className="primary" disabled={issues.length > 0} onClick={() => onCreate(draft)}>
+          Create agent →
         </button>
         {issues.length === 0 && <PolicyPreview draft={draft} />}
       </div>
