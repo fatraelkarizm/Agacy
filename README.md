@@ -65,18 +65,22 @@ the agent's reasoning for the action.
 
 **Delegate binding — compiled, tested, and deployed live to devnet.** `programs/agacy_policy_v2`
 passes 11/11 Rust integration tests (litesvm) proving the CPI delegate mechanism above, and is
-deployed at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet)
-(confirmed executable via `solana program show`). What this does and doesn't prove, precisely: it
-closes the *structural* bypass (an agent cannot spend without this program's policy check
-succeeding first, because it holds no other authority). It does **not** close the
-*confidential-amount-claim* gap — this program still cannot verify a caller-claimed amount matches
-an encrypted transfer's real value, which is why it's tested against classic SPL Token, not
-Token-2022 confidential transfer specifically (that needs ZK proof-context accounts a simulated
-runtime doesn't provide out of the box). See `docs/PRIVACY_ARCHITECTURE.md` section 14 for the full
-design and this exact boundary. Not yet done: a live devnet call exercising this deployed instance
-(litesvm already exhaustively tests the identical compiled bytecode), and wiring the same mechanism
-to Token-2022's confidential transfer instruction specifically. Arcium-based confidential policy
-logic (hiding the limit values themselves) is a separate, unstarted candidate for the same layer.
+deployed at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet).
+Beyond `solana program show` confirming it's executable, `npm run verify-delegate-binding`
+(`scripts/verify-delegate-binding-devnet.ts`) calls the deployed program's real `initialize` and
+`authorize` instructions on live devnet and confirms the on-chain account matches requested limits
+exactly, an in-policy spend increments tracked spend by the exact amount, and an over-limit spend
+is rejected by the running program itself. What this does and doesn't prove, precisely: it closes
+the *structural* bypass (an agent cannot spend without this program's policy check succeeding
+first, because it holds no other authority). It does **not** close the *confidential-amount-claim*
+gap — this program still cannot verify a caller-claimed amount matches an encrypted transfer's real
+value, which is why the CPI-forwarding instruction (`authorize_and_invoke`) is tested against
+classic SPL Token via litesvm, not Token-2022 confidential transfer specifically (that needs ZK
+proof-context accounts a simulated runtime doesn't provide out of the box, and a live-devnet CPI
+transfer is a larger step than the `initialize`/`authorize` check above). See
+`docs/PRIVACY_ARCHITECTURE.md` section 14 for the full design and this exact boundary. Arcium-based
+confidential policy logic (hiding the limit values themselves) is a separate, unstarted candidate
+for the same layer.
 
 ## Verified on devnet
 
