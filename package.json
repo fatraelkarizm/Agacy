@@ -32,7 +32,8 @@
     "@solana/zk-sdk": "^0.4.2",
     "next": "^15.5.22",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "solana-agent-kit": "^2.0.10"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
