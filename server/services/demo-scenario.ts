@@ -157,6 +157,65 @@ export function ciphertextPreview(amount: bigint, salt: number): string {
   return out;
 }
 
+/**
+ * A scripted attacker log for the "why does this matter" demo moment.
+ *
+ * The wallet-drainer research behind this product (docs/references/02-) found
+ * that attackers preferentially target wallets whose balance they can see —
+ * a visible balance is what makes a wallet worth attacking in the first
+ * place. This turns that abstract point into a concrete, narrated sequence:
+ * the same scan succeeds against the exposed wallet and fails against the
+ * confidential one, using the *actual* numbers from the live agent run
+ * rather than a canned example.
+ */
+export interface AttackStepDTO {
+  readonly id: string;
+  readonly target: "exposed" | "confidential";
+  readonly narrative: string;
+  readonly outcome: "revealed" | "blocked";
+  readonly detail: string;
+}
+
+export function buildAttackSimulation(
+  executed: readonly AgentExecutionDTO[],
+  balance: bigint,
+): readonly AttackStepDTO[] {
+  if (executed.length === 0) return [];
+
+  const last = executed[executed.length - 1]!;
+
+  return [
+    {
+      id: "scan-exposed",
+      target: "exposed",
+      narrative: "Attacker pulls this wallet's transaction history from a public block explorer.",
+      outcome: "revealed",
+      detail: `Reads every transfer directly: last payment ${formatTokens(last.amount)} USDC to ${last.recipient.slice(0, 10)}…`,
+    },
+    {
+      id: "size-exposed",
+      target: "exposed",
+      narrative: "Attacker checks the current balance to decide if this wallet is worth targeting.",
+      outcome: "revealed",
+      detail: `Balance reads as plain data: ${formatTokens(balance)} USDC. Flagged as a live target.`,
+    },
+    {
+      id: "scan-confidential",
+      target: "confidential",
+      narrative: "Attacker runs the identical scan against the Agacy-protected wallet.",
+      outcome: "blocked",
+      detail: "Transaction is confirmed and public, but amount and counterparty balance fields decode to ciphertext, not a number.",
+    },
+    {
+      id: "size-confidential",
+      target: "confidential",
+      narrative: "Attacker attempts to size the wallet the same way before deciding whether to pursue it.",
+      outcome: "blocked",
+      detail: "No plaintext balance exists anywhere on-chain to read. There is nothing to size.",
+    },
+  ];
+}
+
 export function formatTokens(baseUnits: bigint, decimals = 6): string {
   const divisor = 10n ** BigInt(decimals);
   const whole = baseUnits / divisor;

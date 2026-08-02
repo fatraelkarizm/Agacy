@@ -14,9 +14,11 @@ import { toPublicView } from "../../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../../server/dto/wallet.dto";
 import type { ProvisionedPolicyDTO } from "../../server/dto/session.dto";
 import {
+  buildAttackSimulation,
   buildAuthorizedDemoHistory,
   ciphertextPreview,
   formatTokens,
+  type AttackStepDTO,
 } from "../../server/services/demo-scenario";
 import { AgentSetup } from "../AgentSetup";
 import { Dashboard } from "../Dashboard";
@@ -98,6 +100,7 @@ export default function DashboardPage() {
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
   const [ownerView, setOwnerView] = useState(false);
+  const [showAttackSim, setShowAttackSim] = useState(false);
   const lastReasoning = useRef("");
 
   const reset = useCallback(() => {
@@ -105,6 +108,7 @@ export default function DashboardPage() {
     setExecuted([]);
     setDone(false);
     setOwnerView(false);
+    setShowAttackSim(false);
   }, []);
 
   // Wallet session guard: this route requires a restorable wallet. No wallet,
@@ -356,6 +360,9 @@ export default function DashboardPage() {
             <button onClick={() => setOwnerView(!ownerView)} disabled={executed.length === 0}>
               {ownerView ? "Hide owner view" : "View as owner"}
             </button>
+            <button onClick={() => setShowAttackSim(!showAttackSim)} disabled={executed.length === 0}>
+              {showAttackSim ? "Hide attacker simulation" : "Simulate attacker"}
+            </button>
             {done && <button onClick={() => router.push("/proof")}>See on-chain proof</button>}
             <button onClick={() => setDashboardSection("overview")}>Back to overview</button>
             <span className="hint">
@@ -372,6 +379,10 @@ export default function DashboardPage() {
               <ConfidentialPanel executed={executed} ownerView={ownerView} balance={balance} />
             </div>
           </div>
+
+          {showAttackSim && (
+            <AttackSimulationPanel steps={buildAttackSimulation(executed, balance)} />
+          )}
         </div>
       ) : undefined}
     </Dashboard>
@@ -509,6 +520,46 @@ function ConfidentialPanel({
           </div>
         </div>
       )}
+    </section>
+  );
+}
+
+function AttackSimulationPanel({ steps }: { steps: readonly AttackStepDTO[] }) {
+  return (
+    <section className="card">
+      <div className="panel-head">
+        <div>
+          <div className="panel-title">Simulated attacker</div>
+          <div className="panel-note">Same scan, run against both wallets from the demo above</div>
+        </div>
+      </div>
+
+      <div className="explorer">
+        {steps.length === 0 ? (
+          <p className="empty">Run the agent at least once first.</p>
+        ) : (
+          steps.map((step) => (
+            <div key={step.id} className="row" style={{ alignItems: "flex-start" }}>
+              <span className={`tag ${step.outcome === "revealed" ? "exposed" : "private"}`}>
+                {step.target}
+              </span>
+              <span>
+                <strong>{step.narrative}</strong>
+                <br />
+                <span className={step.outcome === "revealed" ? "row-val exposed" : "row-val hidden"}>
+                  {step.detail}
+                </span>
+              </span>
+            </div>
+          ))
+        )}
+        {steps.length > 0 && (
+          <div className="verdict private">
+            Same attacker, same scan, same two transactions — one wallet gives up a target, the
+            other gives up nothing.
+          </div>
+        )}
+      </div>
     </section>
   );
 }
