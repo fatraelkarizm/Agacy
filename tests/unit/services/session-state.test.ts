@@ -32,6 +32,7 @@ function session(ownerAddress: string): DashboardSessionDTO {
     agent: null,
     policy: null,
     executed: [],
+    provisionedPolicy: null,
   };
 }
 

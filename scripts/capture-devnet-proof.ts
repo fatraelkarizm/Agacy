@@ -1,7 +1,8 @@
 import "../tests/setup-env.js";
 import { writeFileSync } from "node:fs";
 import { generateKeyPairSigner } from "@solana/kit";
-import { createDevnetClient, loadOrCreatePayer } from "../server/data/solana-client.js";
+import { createDevnetClient } from "../server/data/solana-client.js";
+import { loadOrCreatePayer } from "../server/data/solana-payer.js";
 import { createConfidentialMint } from "../server/data/confidential-mint.js";
 import { createConfidentialTokenAccount } from "../server/data/confidential-account.js";
 import { deriveConfidentialKeys } from "../server/data/confidential-keys.js";

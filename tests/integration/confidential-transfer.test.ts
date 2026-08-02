@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { generateKeyPairSigner, type Address, type KeyPairSigner } from "@solana/kit";
-import { createDevnetClient, getLamportBalance, loadOrCreatePayer } from "@data/solana-client";
+import { createDevnetClient, getLamportBalance } from "@data/solana-client";
+import { loadOrCreatePayer } from "@data/solana-payer";
 import { createConfidentialMint } from "@data/confidential-mint";
 import { createConfidentialTokenAccount } from "@data/confidential-account";
 import { deriveConfidentialKeys, type ConfidentialKeys } from "@data/confidential-keys";

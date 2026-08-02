@@ -7,7 +7,9 @@ import type {
   InjectedWalletMap,
   InjectedWalletProvider,
   InjectedWalletRegistry,
+  InjectedWalletTransaction,
   WalletSessionStorage,
+  WalletSignAndSendResult,
 } from "../types/wallet-provider";
 import { isWalletProviderId } from "../schema/wallet.schema";
 
@@ -121,4 +123,24 @@ export function watchInjectedWalletSession(
     provider.off?.("disconnect", onInvalidated);
     provider.off?.("accountChanged", onInvalidated);
   };
+}
+
+/**
+ * Ask the extension to sign and submit a transaction it did not build itself.
+ * Kept as a one-line wrapper (rather than exposing the raw provider) so every
+ * other module reaches the wallet through the same narrow surface as
+ * `connectInjectedWallet` — nothing outside this file touches the injected
+ * global directly.
+ */
+export async function signAndSendWithInjectedWallet(
+  providerId: WalletProviderId,
+  transaction: InjectedWalletTransaction,
+  registry: InjectedWalletRegistry = browserRegistry(),
+): Promise<WalletSignAndSendResult> {
+  const provider = injectedWallets(registry)[providerId];
+  if (!provider) throw new Error(`${providerId} extension is not installed.`);
+  if (!provider.signAndSendTransaction) {
+    throw new Error(`${providerId} does not support signAndSendTransaction.`);
+  }
+  return provider.signAndSendTransaction(transaction);
 }

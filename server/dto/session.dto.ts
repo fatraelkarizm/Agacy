@@ -14,6 +14,13 @@ import type { DashboardSection } from "./dashboard.dto";
  * should reload from chain state; this DTO only bridges the gap until that
  * exists (see docs/PRODUCT_EXPERIENCE.md open decision #4).
  */
+/** On-chain addresses from a successful `provisionAgentPolicy` call — see server/services/agent-provisioning.ts. */
+export interface ProvisionedPolicyDTO {
+  readonly policyAccount: string;
+  readonly agentAddress: string;
+  readonly signature: string;
+}
+
 export interface DashboardSessionDTO {
   readonly ownerAddress: string;
   readonly dashboardSection: DashboardSection;
@@ -22,4 +29,5 @@ export interface DashboardSessionDTO {
   readonly agent: AgentDraftDTO | null;
   readonly policy: SpendPolicyDTO | null;
   readonly executed: readonly AgentExecutionDTO[];
+  readonly provisionedPolicy: ProvisionedPolicyDTO | null;
 }

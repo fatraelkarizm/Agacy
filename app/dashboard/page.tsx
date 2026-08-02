@@ -12,6 +12,7 @@ import type {
 import type { DashboardSection } from "../../server/dto/dashboard.dto";
 import { toPublicView } from "../../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../../server/dto/wallet.dto";
+import type { ProvisionedPolicyDTO } from "../../server/dto/session.dto";
 import {
   buildAuthorizedDemoHistory,
   ciphertextPreview,
@@ -20,6 +21,8 @@ import {
 import { AgentSetup } from "../AgentSetup";
 import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
+import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
+import { createDevnetClient } from "../../server/data/solana-client";
 import {
   disconnectOwnerWallet,
   restoreOwnerWallet,
@@ -30,6 +33,8 @@ import {
   loadDashboardSession,
   saveDashboardSession,
 } from "../../server/services/session-state";
+
+const devnetClient = createDevnetClient();
 
 /**
  * `/dashboard` is a real route rather than a `stage` value on `/` so that a
@@ -80,6 +85,9 @@ export default function DashboardPage() {
   const [onboardingStep, setOnboardingStep] = useState<AgentOnboardingStep>("define");
   const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
   const [policy, setPolicy] = useState<SpendPolicyDTO | null>(null);
+  const [provisionedPolicy, setProvisionedPolicy] = useState<ProvisionedPolicyDTO | null>(null);
+  const [provisioning, setProvisioning] = useState(false);
+  const [provisioningError, setProvisioningError] = useState<string | null>(null);
 
   const [steps, setSteps] = useState<AgentStep[]>([]);
   const [executed, setExecuted] = useState<AgentExecutionDTO[]>([]);
@@ -117,6 +125,7 @@ export default function DashboardPage() {
           setAgent(session.agent);
           setPolicy(session.policy);
           setExecuted([...session.executed]);
+          setProvisionedPolicy(session.provisionedPolicy);
         }
         setHydrated(true);
       })
@@ -151,8 +160,19 @@ export default function DashboardPage() {
       agent,
       policy,
       executed,
+      provisionedPolicy,
     });
-  }, [agent, dashboardSection, executed, hydrated, onboardingStep, ownerWallet, policy, setupDraft]);
+  }, [
+    agent,
+    dashboardSection,
+    executed,
+    hydrated,
+    onboardingStep,
+    ownerWallet,
+    policy,
+    provisionedPolicy,
+    setupDraft,
+  ]);
 
   const disconnect = useCallback(async () => {
     if (!ownerWallet) return;
@@ -162,6 +182,35 @@ export default function DashboardPage() {
       invalidateWallet();
     }
   }, [invalidateWallet, ownerWallet]);
+
+  const createAgent = useCallback(
+    async (draft: AgentDraftDTO) => {
+      if (!ownerWallet) return;
+      setProvisioning(true);
+      setProvisioningError(null);
+      try {
+        const result = await provisionAgentPolicy({
+          client: devnetClient,
+          ownerWallet,
+          draft,
+        });
+        setProvisionedPolicy(result);
+        setAgent(draft);
+        setPolicy(toSpendPolicy(draft));
+        reset();
+        setDashboardSection("run");
+      } catch (error) {
+        setProvisioningError(
+          error instanceof Error
+            ? error.message
+            : "Could not create the policy account. Check your wallet and devnet SOL balance.",
+        );
+      } finally {
+        setProvisioning(false);
+      }
+    },
+    [ownerWallet, reset],
+  );
 
   const run = useCallback(async () => {
     if (!policy) return;
@@ -231,12 +280,9 @@ export default function DashboardPage() {
           step={onboardingStep}
           onDraftChange={setSetupDraft}
           onStepChange={setOnboardingStep}
-          onCreate={(draft) => {
-            setAgent(draft);
-            setPolicy(toSpendPolicy(draft));
-            reset();
-            setDashboardSection("run");
-          }}
+          onCreate={(draft) => void createAgent(draft)}
+          provisioning={provisioning}
+          provisioningError={provisioningError}
         />
       ) : dashboardSection === "run" && policy && agent ? (
         <div className="dashboard-run">
@@ -252,6 +298,22 @@ export default function DashboardPage() {
               Max {formatTokens(policy.maxPerTransfer)} USDC per transfer
             </span>
           </div>
+
+          {provisionedPolicy && (
+            <p className="hint">
+              Policy account created on devnet:{" "}
+              <a
+                href={`https://explorer.solana.com/address/${provisionedPolicy.policyAccount}?cluster=devnet`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {provisionedPolicy.policyAccount.slice(0, 8)}…
+              </a>{" "}
+              with these limits. The run below still checks policy locally — the agent does not yet
+              sign a real per-transfer <code>authorize</code> call against this account (delegate
+              binding, tracked in FEATURES.md, is what closes that gap).
+            </p>
+          )}
 
           <div className="controls">
             <button className="primary" onClick={run} disabled={running}>

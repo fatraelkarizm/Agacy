@@ -40,6 +40,10 @@ interface AgentSetupProps {
   readonly onDraftChange: (draft: AgentDraftDTO) => void;
   readonly onStepChange: (step: AgentOnboardingStep) => void;
   readonly onCreate: (draft: AgentDraftDTO) => void;
+  /** True while the owner's signature is being requested and the policy account transaction is in flight. */
+  readonly provisioning?: boolean;
+  /** Set when the last provisioning attempt failed; cleared by trying again. */
+  readonly provisioningError?: string | null;
 }
 
 export function AgentSetup({
@@ -49,6 +53,8 @@ export function AgentSetup({
   onDraftChange,
   onStepChange,
   onCreate,
+  provisioning = false,
+  provisioningError = null,
 }: AgentSetupProps) {
   const issues = validateAgentDraft(draft);
   const stepIndex = ONBOARDING_STEPS.findIndex(({ id }) => id === step);
@@ -205,16 +211,23 @@ export function AgentSetup({
               <ReviewItem label="Authority" value="Scoped agent permission" />
             </dl>
             <PolicyPreview draft={draft} />
+            {provisioningError && (
+              <p className="field-error" role="alert">
+                {provisioningError} You can try again — nothing was created.
+              </p>
+            )}
           </div>
         )}
           </div>
 
           <div className="step-footer onboarding-actions">
-            <button onClick={back} disabled={stepIndex === 0}>
+            <button onClick={back} disabled={stepIndex === 0 || provisioning}>
               Back
             </button>
             <span className="hint">
-              Step {stepIndex + 1} of {ONBOARDING_STEPS.length}
+              {provisioning
+                ? "Waiting for your wallet signature..."
+                : `Step ${stepIndex + 1} of ${ONBOARDING_STEPS.length}`}
             </span>
             {step !== "review" ? (
               <button
@@ -225,8 +238,16 @@ export function AgentSetup({
                 Continue
               </button>
             ) : (
-              <button className="primary" disabled={issues.length > 0} onClick={() => onCreate(draft)}>
-                Create agent
+              <button
+                className="primary"
+                disabled={issues.length > 0 || provisioning}
+                onClick={() => onCreate(draft)}
+              >
+                {provisioning
+                  ? "Creating policy account..."
+                  : provisioningError
+                    ? "Retry"
+                    : "Create agent"}
               </button>
             )}
           </div>

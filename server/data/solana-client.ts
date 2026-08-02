@@ -1,22 +1,33 @@
 import {
+  appendTransactionMessageInstructions,
   createSolanaRpc,
   createSolanaRpcSubscriptions,
   createKeyPairSignerFromBytes,
+  createTransactionMessage,
   generateKeyPairSigner,
+  getBase58Decoder,
+  pipe,
+  setTransactionMessageFeePayerSigner,
+  setTransactionMessageLifetimeUsingBlockhash,
+  signAndSendTransactionMessageWithSigners,
+  type Instruction,
   type Rpc,
   type SolanaRpcApi,
   type RpcSubscriptions,
   type SolanaRpcSubscriptionsApi,
   type KeyPairSigner,
+  type TransactionSigner,
 } from "@solana/kit";
-import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 
 /**
  * Thin RPC wiring. Everything here is transport concern only — no business
  * rules, no policy decisions, no DTO shaping. Callers get raw clients and are
  * expected to hand results up to the service layer for interpretation.
+ *
+ * Browser-safe by design: nothing here imports a Node built-in. Node-only
+ * payer resolution (reading a local keypair file) lives in solana-payer.ts
+ * instead, so this file can be imported from a client component without
+ * webpack choking on node:fs/node:os/node:path.
  */
 
 /**
@@ -88,34 +99,29 @@ export async function fundFromFaucet(
 }
 
 /**
- * Resolve a funded payer, in order of preference:
- *   1. AGACY_PAYER_SECRET_KEY (JSON byte array)
- *   2. the Solana CLI's default keypair at ~/.config/solana/id.json
- *   3. a fresh keypair (which will need faucet funding)
- *
- * The CLI keypair fallback exists because the public devnet faucet rate-limits
- * aggressively; reusing an already-funded local keypair avoids depending on it.
+ * Compile, sign, and send a transaction for an arbitrary `TransactionSigner`
+ * fee payer — a wallet-backed `TransactionSendingSigner` as well as a plain
+ * `KeyPairSigner`. Kept separate from `confidential-mint.ts`'s `sendInstructions`,
+ * which is specifically shaped for the Node-script rate-limit-retry flow used
+ * to run several proof-verification transactions back to back; this is the
+ * general one-shot path for anything signed through a connected wallet.
  */
-export async function loadOrCreatePayer(): Promise<KeyPairSigner> {
-  const fromEnv = process.env["AGACY_PAYER_SECRET_KEY"];
-  if (fromEnv) return signerFromJsonBytes(fromEnv, "AGACY_PAYER_SECRET_KEY");
+export async function sendInstructionsWithSigner(
+  client: SolanaClient,
+  feePayer: TransactionSigner,
+  instructions: readonly Instruction[],
+): Promise<string> {
+  const { value: latestBlockhash } = await client.rpc.getLatestBlockhash().send();
 
-  const cliKeypairPath = join(homedir(), ".config", "solana", "id.json");
-  if (existsSync(cliKeypairPath)) {
-    return signerFromJsonBytes(readFileSync(cliKeypairPath, "utf8"), cliKeypairPath);
-  }
+  const message = pipe(
+    createTransactionMessage({ version: 0 }),
+    (m) => setTransactionMessageFeePayerSigner(feePayer, m),
+    (m) => setTransactionMessageLifetimeUsingBlockhash(latestBlockhash, m),
+    (m) => appendTransactionMessageInstructions(instructions, m),
+  );
 
-  return generateKeyPairSigner();
-}
-
-async function signerFromJsonBytes(raw: string, source: string): Promise<KeyPairSigner> {
-  let bytes: number[];
-  try {
-    bytes = JSON.parse(raw) as number[];
-  } catch (cause) {
-    throw new Error(`${source} must contain a JSON array of secret key bytes`, { cause });
-  }
-  return createKeyPairSignerFromBytes(new Uint8Array(bytes));
+  const signatureBytes = await signAndSendTransactionMessageWithSigners(message);
+  return getBase58Decoder().decode(signatureBytes);
 }
 
 export async function getLamportBalance(

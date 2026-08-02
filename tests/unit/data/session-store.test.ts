@@ -31,6 +31,7 @@ function session(overrides: Partial<DashboardSessionDTO> = {}): DashboardSession
     agent: null,
     policy: null,
     executed: [],
+    provisionedPolicy: null,
     ...overrides,
   };
 }

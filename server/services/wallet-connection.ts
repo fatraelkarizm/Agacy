@@ -1,3 +1,4 @@
+import { address, type TransactionSendingSigner } from "@solana/kit";
 import {
   connectInjectedWallet,
   detectInjectedWallets,
@@ -7,6 +8,7 @@ import {
   rememberWalletProvider,
   watchInjectedWalletSession,
 } from "../data/wallet-provider";
+import { createWalletTransactionSigner } from "../data/wallet-signer";
 import type {
   WalletConnectionDTO,
   WalletProviderId,
@@ -51,6 +53,17 @@ export async function disconnectOwnerWallet(provider: WalletProviderId): Promise
   } finally {
     forgetWalletProvider();
   }
+}
+
+/**
+ * The signer that fee-pays and authorizes any transaction the owner needs to
+ * approve (provisioning a policy account, later delegate-binding). Building
+ * this from a connected `WalletConnectionDTO` rather than exposing the
+ * injected provider keeps the same "one narrow surface" rule as the rest of
+ * this file.
+ */
+export function getOwnerTransactionSigner(wallet: WalletConnectionDTO): TransactionSendingSigner {
+  return createWalletTransactionSigner(address(wallet.address), wallet.provider);
 }
 
 export function watchOwnerWalletSession(

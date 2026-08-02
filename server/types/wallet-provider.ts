@@ -4,6 +4,22 @@ export interface WalletPublicKey {
   toString(): string;
 }
 
+/**
+ * Whatever object the wallet extension hands back after it signs and submits
+ * a transaction. Phantom and Solflare's legacy injected API both return a
+ * base58 signature string here rather than raw bytes.
+ */
+export interface WalletSignAndSendResult {
+  readonly signature: string;
+}
+
+/**
+ * Structurally, not nominally, a `@solana/web3.js` `VersionedTransaction` —
+ * this project does not import web3.js types into its own type layer, only
+ * the shape the injected wallet's legacy `signAndSendTransaction` expects.
+ */
+export type InjectedWalletTransaction = unknown;
+
 export interface InjectedWalletProvider {
   readonly isPhantom?: boolean;
   readonly isSolflare?: boolean;
@@ -14,6 +30,14 @@ export interface InjectedWalletProvider {
   disconnect?(): Promise<void>;
   on?(event: "disconnect" | "accountChanged", listener: () => void): void;
   off?(event: "disconnect" | "accountChanged", listener: () => void): void;
+  /**
+   * Not yet exercised against a real Phantom/Solflare extension in this
+   * environment — see docs/INFRASTRUCTURE.md "Open Implementation Questions"
+   * before trusting this path in a live demo.
+   */
+  signAndSendTransaction?(
+    transaction: InjectedWalletTransaction,
+  ): Promise<WalletSignAndSendResult>;
 }
 
 export interface InjectedWalletRegistry {
