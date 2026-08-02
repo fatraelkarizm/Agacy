@@ -15,8 +15,25 @@ An AI agent transacts on Solana through native **Confidential Transfer** (Token-
 - **Agent layer:** Solana Agent Kit
 - **App:** Next.js + TypeScript
 
-## Status
-🚧 Work in progress — see `docs/FEATURES.md` (local only, not tracked in this repo) for live build status.
+## Verified on devnet
+
+| | |
+|---|---|
+| Confidential transfer | [`5vTuKeoULGc…`](https://explorer.solana.com/tx/5vTuKeoULGc26FdNoxCVErWbYzet1jReDhgRqvp2Le9erDsWTx8p4P4VCGotC9mwFHaifazLeAbzq2mpCLwqAEtz?cluster=devnet) |
+| Spend policy program | [`AmJYcUrs36n…`](https://explorer.solana.com/address/AmJYcUrs36nwpiEZxJDB5q49LbXypBVujNVMvKMWg19e?cluster=devnet) |
+| Transferred amount readable on-chain | **No** — verified by reading the recipient account bytes |
+
+66 tests passing (56 TypeScript, 10 Rust).
+
+## Run it
+
+```bash
+npm install
+npm run dev            # landing page + live agent demo
+npm test               # unit tests
+npm run test:integration   # devnet round trip (needs AGACY_RPC_URL)
+npm run capture-proof      # re-record the on-chain evidence
+```
 
 ## Project docs
 Planning documents (`PRD`, `FEATURES`, `INFRASTRUCTURE`, `ARCHITECTURE`, competitive/market research) are kept local and are not published to this repo — see `AGENTS.md` for the contributor-facing summary of architecture rules and available agent skills.
