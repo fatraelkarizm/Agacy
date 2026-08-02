@@ -12,6 +12,9 @@ import {
   executeConfidentialTransfer,
 } from "../server/data/confidential-transfer.js";
 import { fetchConfidentialBalance } from "../server/data/confidential-balance.js";
+import { sendInstructions } from "../server/data/confidential-mint.js";
+import { buildMemoInstruction } from "../server/data/memo.js";
+import { deriveReasoningKey, encryptReasoning } from "../server/data/reasoning-crypto.js";
 
 /**
  * Runs the full confidential transfer flow on devnet and records the real
@@ -78,6 +81,31 @@ const raw = Buffer.from(account.value!.data[0], "base64");
 const plaintext = Buffer.alloc(8);
 plaintext.writeBigUInt64LE(TRANSFER);
 
+// Same "verify, don't assert" standard applied to the agent's reasoning: encrypt
+// it under a key derived the same way the confidential keys are (a signature),
+// carry the ciphertext on-chain in a Memo instruction, then read the transaction
+// back and confirm the reasoning text is nowhere in its raw bytes.
+const REASONING = "Renewed the API subscription because usage stayed within the monthly budget.";
+const reasoningKey = await deriveReasoningKey(new Uint8Array(64).fill(33));
+const reasoningCiphertext = await encryptReasoning(reasoningKey, REASONING);
+// The Memo program requires valid UTF-8 instruction data — raw ciphertext bytes
+// aren't, so they travel as base64 text, which is.
+const reasoningMemoText = Buffer.from(reasoningCiphertext).toString("base64");
+
+const memoSignature = await sendInstructions(client, payer, [
+  buildMemoInstruction(new TextEncoder().encode(reasoningMemoText)),
+]);
+
+const memoTx = await client.rpc
+  .getTransaction(memoSignature as never, {
+    commitment: "confirmed",
+    encoding: "base64",
+    maxSupportedTransactionVersion: 0,
+  })
+  .send();
+const memoRaw = Buffer.from((memoTx as { transaction: [string, string] }).transaction[0], "base64");
+const reasoningFoundInTransaction = memoRaw.includes(Buffer.from(REASONING, "utf8"));
+
 const proof = {
   capturedAt: new Date().toISOString(),
   cluster: "devnet",
@@ -89,9 +117,14 @@ const proof = {
   transferAmount: TRANSFER.toString(),
   remainingBalance: remainingBalance.toString(),
   amountFoundInRecipientAccountData: raw.includes(plaintext),
+  reasoningMemoSignature: memoSignature,
+  reasoningPlaintext: REASONING,
+  reasoningFoundInTransaction,
 };
 
 writeFileSync("server/data/devnet-proof.json", JSON.stringify(proof, null, 2) + "\n");
 console.log("\ntransfer signature:", signature);
 console.log("amount readable in recipient account data:", proof.amountFoundInRecipientAccountData);
+console.log("reasoning memo signature:", memoSignature);
+console.log("reasoning readable in transaction bytes:", reasoningFoundInTransaction);
 console.log("saved -> server/data/devnet-proof.json");

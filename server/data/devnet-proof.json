@@ -1,14 +1,15 @@
 {
-  "capturedAt": "2026-08-02T03:30:12.357Z",
+  "capturedAt": "2026-08-02T16:59:08.305Z",
   "cluster": "devnet",
-  "mint": "2rhj95tELtQKMEnTSgaZem3udLHhFj8Fr9EStFCscrsd",
-  "senderAccount": "4dbYHAVZdz1f4KaiQJcfqmVqXNFKqgSAYhL9us93fUHo",
-  "recipientAccount": "5veYzD4zZzwtN7VUR9mwUQJD5MerRq1bZttFKhv7fCno",
-  "depositSignature": "diTuTVeVLHVYwPu6LTm7xsxWsm2TL1nDvx5vqB4wmguQjCQwU5F1zBvmmVaJWbfp7N2kjYL9zuULcJAQQbmcBqC",
-  "transferSignature": "5vTuKeoULGc26FdNoxCVErWbYzet1jReDhgRqvp2Le9erDsWTx8p4P4VCGotC9mwFHaifazLeAbzq2mpCLwqAEtz",
+  "mint": "HTSoLAkBjwMDVgjmkauU11fjecZTnauhkz1zbA4QVSYF",
+  "senderAccount": "Qvj8d2JUJNZoZfwaCakecwmLbJUDfWyQi6AtyFMBSww",
+  "recipientAccount": "8iiJgvJf3HLW4QptRUSuRuyp1zFW43BY3WFQUxnQrzer",
+  "depositSignature": "DBm7x2kb5Jyt259bxYp6MtDSjsxb2QfcjCDBUVQzWoTzVEZfGokxRdRx8ZbK8mB3KgQQfxreb1sW7wuD7Axw2gH",
+  "transferSignature": "2WBtgvnRVQGQXizZFL4Ei2oAyd4ABXfnbCheQFfdJ1WAtZtnZDfwESGhqSgX7Txp3MoD4FpFYU9vRrSBpEVknXuK",
   "transferAmount": "2500000",
   "remainingBalance": "7500000",
   "amountFoundInRecipientAccountData": false,
-  "policyProgramId": "AmJYcUrs36nwpiEZxJDB5q49LbXypBVujNVMvKMWg19e",
-  "policyDeploySignature": "4eyGCH9QAeYUvUEMh51nmKr1ZzeJLswCu6J389JPqohJR3nGFdbFaCCc4dg4zpDJJGtA4VMY27cmSGiBUw7NdwN4"
+  "reasoningMemoSignature": "dU4y7GjzrjP826w3pxAMVHTppQ4J4UMyssozzD6NJpU4p2VqCEWW6T2UyEXV6TY9r7NzVY4sys6DPhStTDwA3oH",
+  "reasoningPlaintext": "Renewed the API subscription because usage stayed within the monthly budget.",
+  "reasoningFoundInTransaction": false
 }
