@@ -1,10 +1,13 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { address } from "@solana/kit";
+import { SYSTEM_PROGRAM_ADDRESS } from "@solana-program/system";
+import type { SolanaClient } from "@data/solana-client";
 import {
   POLICY_ACCOUNT_LEN,
   POLICY_PROGRAM_ID,
   buildAuthorizeSpendInstruction,
   buildInitializePolicyInstruction,
+  buildProvisionPolicyAccountInstructions,
   buildUpdateLimitsInstruction,
   decodePolicyAccount,
 } from "@data/policy-program";
@@ -15,6 +18,18 @@ const POLICY = address("2rhj95tELtQKMEnTSgaZem3udLHhFj8Fr9EStFCscrsd");
 
 const ownerSigner = { address: OWNER } as never;
 const agentSigner = { address: AGENT } as never;
+const policySigner = { address: POLICY } as never;
+
+/** Just enough of SolanaClient for a rent-exemption lookup — no real RPC involved. */
+function clientWithRent(lamports: bigint): SolanaClient {
+  return {
+    rpc: {
+      getMinimumBalanceForRentExemption: vi.fn(() => ({
+        send: () => Promise.resolve(lamports),
+      })),
+    },
+  } as never;
+}
 
 /** Build a policy account exactly as the on-chain program would write it. */
 function encodePolicyAccount(overrides: Partial<Record<string, bigint>> = {}): Uint8Array {
@@ -54,6 +69,65 @@ describe("initialize policy instruction", () => {
   it("requires the owner as a signer", () => {
     expect(ix.accounts[1]?.address).toBe(OWNER);
     expect(ix.accounts[1]?.signer).toBeDefined();
+  });
+});
+
+describe("provisioning a policy account", () => {
+  it("allocates exactly the space the program expects, owned by the policy program", async () => {
+    const [createIx] = await buildProvisionPolicyAccountInstructions(clientWithRent(1_500_000n), {
+      policyAccount: policySigner,
+      owner: ownerSigner,
+      agent: AGENT,
+      maxPerTransfer: 20_000_000n,
+      maxPerPeriod: 50_000_000n,
+      periodSeconds: 86_400n,
+    });
+
+    expect(createIx?.programAddress).toBe(SYSTEM_PROGRAM_ADDRESS);
+    expect(createIx?.data).toBeDefined();
+  });
+
+  it("pays exactly the rent the RPC reports, not a guessed constant", async () => {
+    const rent = 987_654n;
+    const spy = vi.fn(() => ({ send: () => Promise.resolve(rent) }));
+    const client = { rpc: { getMinimumBalanceForRentExemption: spy } } as never as SolanaClient;
+
+    await buildProvisionPolicyAccountInstructions(client, {
+      policyAccount: policySigner,
+      owner: ownerSigner,
+      agent: AGENT,
+      maxPerTransfer: 1n,
+      maxPerPeriod: 1n,
+      periodSeconds: 1n,
+    });
+
+    expect(spy).toHaveBeenCalledWith(BigInt(POLICY_ACCOUNT_LEN));
+  });
+
+  it("chains the same policy account into the initialize instruction", async () => {
+    const [, initIx] = await buildProvisionPolicyAccountInstructions(clientWithRent(1n), {
+      policyAccount: policySigner,
+      owner: ownerSigner,
+      agent: AGENT,
+      maxPerTransfer: 20_000_000n,
+      maxPerPeriod: 50_000_000n,
+      periodSeconds: 86_400n,
+    });
+
+    expect(initIx?.accounts[0]?.address).toBe(POLICY);
+    expect(initIx?.data[0]).toBe(0);
+  });
+
+  it("returns exactly two instructions — create then initialize, never one without the other", async () => {
+    const instructions = await buildProvisionPolicyAccountInstructions(clientWithRent(1n), {
+      policyAccount: policySigner,
+      owner: ownerSigner,
+      agent: AGENT,
+      maxPerTransfer: 1n,
+      maxPerPeriod: 1n,
+      periodSeconds: 1n,
+    });
+    expect(instructions).toHaveLength(2);
   });
 });
 

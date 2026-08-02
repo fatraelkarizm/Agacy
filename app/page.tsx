@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import {
   Brain,
   Buildings,
@@ -15,26 +16,8 @@ import {
   Wallet,
 } from "@phosphor-icons/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
-import type {
-  AgentDraftDTO,
-  AgentExecutionDTO,
-  AgentOnboardingStep,
-  SpendPolicyDTO,
-} from "../server/dto/agent.dto";
-import type { DashboardSection } from "../server/dto/dashboard.dto";
-import { toPublicView } from "../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../server/dto/wallet.dto";
-import {
-  buildAuthorizedDemoHistory,
-  ciphertextPreview,
-  formatTokens,
-} from "../server/services/demo-scenario";
-import devnetProof from "../server/data/devnet-proof.json";
-import { AgentSetup } from "./AgentSetup";
-import { Dashboard } from "./Dashboard";
 import { WalletGate } from "./WalletGate";
-import { PURPOSE_PRESETS, toSpendPolicy } from "../server/services/agent-setup";
 import {
   disconnectOwnerWallet,
   restoreOwnerWallet,
@@ -42,13 +25,14 @@ import {
 } from "../server/services/wallet-connection";
 
 /**
- * The demo is a guided walkthrough rather than one long page: you define an
- * agent, watch it run under those limits, then check the on-chain evidence.
- * Splitting it means each step can make one point properly instead of three
- * competing for the same screen.
+ * `/` only ever shows the marketing landing page and the wallet-connect gate.
+ * Once a wallet is connected, navigation moves to the real `/dashboard`
+ * route (see app/dashboard/page.tsx) rather than an internal `stage` value —
+ * a browser refresh needs the URL itself to say where the owner was, not a
+ * piece of React state that resets to its initial value on every reload.
  */
 
-type Stage = "intro" | "connect" | "dashboard" | "proof";
+type Stage = "intro" | "connect";
 
 const LANDING_LINKS = [
   { id: "product", label: "Product" },
@@ -57,64 +41,16 @@ const LANDING_LINKS = [
   { id: "privacy-stack", label: "Privacy stack" },
 ] as const;
 
-const TASKS: readonly AgentTask[] = [
-  {
-    prompt: "Monthly API subscription came due, renewing at the usual rate.",
-    amount: 4_200_000n,
-    recipient: "Sub1er4kQmVnH8dGpXwYzR3tNc5bVfJ2sLmQ9pDhK",
-    recipientLabel: "API subscription",
-  },
-  {
-    prompt: "Inference credits are nearly out; topping up before the queue stalls.",
-    amount: 12_500_000n,
-    recipient: "Cmp7yTn2WxLqE9vRb4sKfJ6hGpZa3MdUc8NrVwXt",
-    recipientLabel: "Compute credits",
-  },
-  {
-    prompt: "Buying the market dataset the weekly report depends on.",
-    amount: 31_750_000n,
-    recipient: "Dta9mKpR5nZwQ2eXcVb7yLsHfG4jTaU6dNrMwPkB",
-    recipientLabel: "Market dataset",
-  },
-];
-
-const INITIAL_BALANCE = 250_000_000n;
-
 export default function Home() {
+  const router = useRouter();
   const [stage, setStage] = useState<Stage>("intro");
-  const [dashboardSection, setDashboardSection] = useState<DashboardSection>("overview");
   const [ownerWallet, setOwnerWallet] = useState<WalletConnectionDTO | null>(null);
   const [restoringWallet, setRestoringWallet] = useState(true);
-  const [setupDraft, setSetupDraft] = useState<AgentDraftDTO>({
-    name: "Ops agent",
-    purpose: "subscriptions",
-    ...PURPOSE_PRESETS.subscriptions,
-  });
-  const [onboardingStep, setOnboardingStep] = useState<AgentOnboardingStep>("define");
-  const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
-  const [policy, setPolicy] = useState<SpendPolicyDTO | null>(null);
-
-  const [steps, setSteps] = useState<AgentStep[]>([]);
-  const [executed, setExecuted] = useState<AgentExecutionDTO[]>([]);
-  const [running, setRunning] = useState(false);
-  const [done, setDone] = useState(false);
-  const [ownerView, setOwnerView] = useState(false);
-  const lastReasoning = useRef("");
-
-  const reset = useCallback(() => {
-    setSteps([]);
-    setExecuted([]);
-    setDone(false);
-    setOwnerView(false);
-  }, []);
 
   const invalidateWallet = useCallback(() => {
     setOwnerWallet(null);
-    setAgent(null);
-    setPolicy(null);
-    reset();
     setStage("connect");
-  }, [reset]);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -142,14 +78,13 @@ export default function Home() {
     }
   }, [invalidateWallet, ownerWallet]);
 
-  const openDashboard = useCallback((section: DashboardSection = "overview") => {
+  const enterDashboard = useCallback(() => {
     if (!ownerWallet) {
       setStage("connect");
       return;
     }
-    setDashboardSection(section);
-    setStage("dashboard");
-  }, [ownerWallet]);
+    router.push("/dashboard");
+  }, [ownerWallet, router]);
 
   const showLandingSection = useCallback((sectionId: string) => {
     setStage("intro");
@@ -158,95 +93,54 @@ export default function Home() {
     });
   }, []);
 
-  const run = useCallback(async () => {
-    if (!policy) return;
-    reset();
-    setRunning(true);
-    lastReasoning.current = "";
-
-    await runAgent({
-      tasks: TASKS,
-      policy,
-      initialState: { availableBalance: INITIAL_BALANCE, spentThisPeriod: 0n },
-      onStep: async (step) => {
-        if (step.kind === "think") lastReasoning.current = step.text;
-        setSteps((prev) => [...prev, step]);
-        if (step.kind === "execute" && step.amount !== undefined) {
-          const amount = step.amount;
-          setExecuted((prev) => [
-            ...prev,
-            { amount, recipient: step.recipient ?? "", reasoning: lastReasoning.current },
-          ]);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 620));
-      },
-    });
-
-    setRunning(false);
-    setDone(true);
-  }, [policy, reset]);
-
-  const spent = executed.reduce((sum, e) => sum + e.amount, 0n);
-  const balance = INITIAL_BALANCE - spent;
-  const authorizedTransactions = buildAuthorizedDemoHistory(executed, INITIAL_BALANCE);
-  const publicTransactions = authorizedTransactions.map(toPublicView);
-  const currentTask = steps.at(-1)?.text ?? "Ready for a task";
-
   return (
     <>
-      {stage !== "dashboard" && (
-        <nav className="nav">
-          <div className="nav-inner">
-            <button
-              className="brand"
-              onClick={() => showLandingSection("product")}
-              aria-label="Agacy home"
-            >
-              <span className="brand-mark" />
-              Agacy
-            </button>
-            <div className="nav-links" aria-label="Landing page sections">
-              {LANDING_LINKS.map((link) => (
-                <button key={link.id} onClick={() => showLandingSection(link.id)}>
-                  {link.label}
-                </button>
-              ))}
-              <a href="/docs">
-                <FileText aria-hidden="true" size={14} weight="duotone" />
-                Docs
-              </a>
-            </div>
-            <div className="nav-actions">
-              {ownerWallet && (
-                <button className="nav-disconnect" onClick={() => void disconnect()}>
-                  Disconnect
-                </button>
-              )}
-              <button
-                className="primary nav-launch"
-                onClick={() => openDashboard("overview")}
-                disabled={restoringWallet}
-              >
-                {!restoringWallet && !ownerWallet && (
-                  <Wallet aria-hidden="true" size={17} weight="duotone" />
-                )}
-                {restoringWallet
-                  ? "Checking wallet..."
-                  : ownerWallet
-                    ? shortAddress(ownerWallet.address)
-                    : "Connect wallet"}
+      <nav className="nav">
+        <div className="nav-inner">
+          <button
+            className="brand"
+            onClick={() => showLandingSection("product")}
+            aria-label="Agacy home"
+          >
+            <span className="brand-mark" />
+            Agacy
+          </button>
+          <div className="nav-links" aria-label="Landing page sections">
+            {LANDING_LINKS.map((link) => (
+              <button key={link.id} onClick={() => showLandingSection(link.id)}>
+                {link.label}
               </button>
-            </div>
+            ))}
+            <a href="/docs">
+              <FileText aria-hidden="true" size={14} weight="duotone" />
+              Docs
+            </a>
           </div>
-        </nav>
-      )}
+          <div className="nav-actions">
+            {ownerWallet && (
+              <button className="nav-disconnect" onClick={() => void disconnect()}>
+                Disconnect
+              </button>
+            )}
+            <button
+              className="primary nav-launch"
+              onClick={enterDashboard}
+              disabled={restoringWallet}
+            >
+              {!restoringWallet && !ownerWallet && (
+                <Wallet aria-hidden="true" size={17} weight="duotone" />
+              )}
+              {restoringWallet
+                ? "Checking wallet..."
+                : ownerWallet
+                  ? shortAddress(ownerWallet.address)
+                  : "Connect wallet"}
+            </button>
+          </div>
+        </div>
+      </nav>
 
-      {stage === "intro" && (
-        <Intro
-          onStart={() => openDashboard("overview")}
-          onProof={() => setStage("proof")}
-        />
-      )}
+      {stage === "intro" && <Intro onStart={enterDashboard} onProof={() => router.push("/proof")} />}
 
       {stage === "connect" && (
         <div className="wrap step-page wallet-page">
@@ -261,104 +155,20 @@ export default function Home() {
           <WalletGate
             onConnected={(wallet) => {
               setOwnerWallet(wallet);
-              setDashboardSection("overview");
-              setStage("dashboard");
+              router.push("/dashboard");
             }}
           />
         </div>
       )}
 
-      {stage === "dashboard" && ownerWallet && (
-        <Dashboard
-          section={dashboardSection}
-          ownerWallet={ownerWallet}
-          agent={agent}
-          policy={policy}
-          publicTransactions={publicTransactions}
-          authorizedTransactions={authorizedTransactions}
-          balance={balance}
-          operationalStatus={running ? "active" : "idle"}
-          currentTask={currentTask}
-          ownerView={ownerView}
-          onNavigate={setDashboardSection}
-          onNewAgent={() => setDashboardSection("onboarding")}
-          onToggleOwnerView={() => setOwnerView((visible) => !visible)}
-          onDisconnect={() => void disconnect()}
-          onProof={() => setStage("proof")}
-          onLanding={() => showLandingSection("product")}
-        >
-          {dashboardSection === "onboarding" ? (
-            <AgentSetup
-              draft={setupDraft}
-              ownerWallet={ownerWallet}
-              step={onboardingStep}
-              onDraftChange={setSetupDraft}
-              onStepChange={setOnboardingStep}
-              onCreate={(draft) => {
-                setAgent(draft);
-                setPolicy(toSpendPolicy(draft));
-                reset();
-                setDashboardSection("run");
-              }}
-            />
-          ) : dashboardSection === "run" && policy && agent ? (
-            <div className="dashboard-run">
-              <div className="dashboard-workspace-intro">
-                <div>
-                  <h2>Watch {agent.name} work.</h2>
-                  <p>
-                    The agent proposes each payment. The policy check runs outside the model before
-                    value moves.
-                  </p>
-                </div>
-                <span className="hint">
-                  Max {formatTokens(policy.maxPerTransfer)} USDC per transfer
-                </span>
-              </div>
-
-              <div className="controls">
-                <button className="primary" onClick={run} disabled={running}>
-                  {running ? "Agent running..." : done ? "Run again" : "Start agent"}
-                </button>
-                <button onClick={reset} disabled={running || steps.length === 0}>
-                  Reset
-                </button>
-                <button onClick={() => setOwnerView(!ownerView)} disabled={executed.length === 0}>
-                  {ownerView ? "Hide owner view" : "View as owner"}
-                </button>
-                {done && <button onClick={() => setStage("proof")}>See on-chain proof</button>}
-                <button onClick={() => setDashboardSection("overview")}>Back to overview</button>
-                <span className="hint">
-                  {steps.length === 0
-                    ? "Idle."
-                    : `${executed.length} paid | ${formatTokens(balance)} USDC left`}
-                </span>
-              </div>
-
-              <div className="layout">
-                <AgentConsole steps={steps} running={running} />
-                <div className="panels">
-                  <ExposedPanel executed={executed} balance={balance} />
-                  <ConfidentialPanel executed={executed} ownerView={ownerView} balance={balance} />
-                </div>
-              </div>
-            </div>
-          ) : undefined}
-        </Dashboard>
-      )}
-
-      {stage === "proof" && <Proof />}
-
-      {stage !== "dashboard" && (
-        <footer className="foot">
-          <div className="wrap">
-            The blocked payment is not the model changing its mind. The agent still proposes it.
-            The spend policy is enforced outside the model, so a prompt-injected or malfunctioning
-            agent cannot talk its way past it. Amounts are hidden by Solana&apos;s native Token-2022
-            confidential transfers.
-          </div>
-        </footer>
-      )}
+      <footer className="foot">
+        <div className="wrap">
+          The blocked payment is not the model changing its mind. The agent still proposes it.
+          The spend policy is enforced outside the model, so a prompt-injected or malfunctioning
+          agent cannot talk its way past it. Amounts are hidden by Solana&apos;s native Token-2022
+          confidential transfers.
+        </div>
+      </footer>
     </>
   );
 }
@@ -621,181 +431,5 @@ function HeroVideo() {
         <source src="/agacy-private-core.mp4" type="video/mp4" />
       </video>
     </div>
-  );
-}
-
-function Proof() {
-  return (
-    <div className="wrap step-page">
-      <div className="step-head">
-        <div className="step-index">On-chain evidence</div>
-        <h2>Not a mockup. Verified on devnet.</h2>
-        <p className="section-sub">
-          Everything above runs for real. Below is an actual confidential transfer this codebase
-          executed on Solana devnet: the transaction is public and confirmed, and the transferred
-          amount is provably absent from the recipient&apos;s account data. Open any of them.
-        </p>
-      </div>
-
-      <div className="proof-grid">
-        <ProofItem label="Transfer transaction" value={devnetProof.transferSignature} isTx />
-        <ProofItem label="Confidential mint" value={devnetProof.mint} />
-        <ProofItem label="Recipient account" value={devnetProof.recipientAccount} />
-        <ProofItem label="Spend policy program" value={devnetProof.policyProgramId} />
-        <div className="proof-item">
-          <div className="proof-label">Amount readable on-chain</div>
-          <div className="proof-verdict">
-            {devnetProof.amountFoundInRecipientAccountData ? "yes" : "no, encrypted"}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ProofItem({ label, value, isTx }: { label: string; value: string; isTx?: boolean }) {
-  const href = `https://explorer.solana.com/${isTx ? "tx" : "address"}/${value}?cluster=devnet`;
-  return (
-    <div className="proof-item">
-      <div className="proof-label">{label}</div>
-      <a className="proof-value" href={href} target="_blank" rel="noreferrer">
-        {value.slice(0, 22)}…
-      </a>
-    </div>
-  );
-}
-
-const STEP_LABEL: Record<AgentStep["kind"], string> = {
-  observe: "observes",
-  think: "reasons",
-  decide: "decides",
-  policy: "policy ok",
-  execute: "executes",
-  refused: "blocked",
-};
-
-function AgentConsole({ steps, running }: { steps: AgentStep[]; running: boolean }) {
-  return (
-    <section className="card console">
-      <div className="console-head">
-        <span className={running ? "dot live" : "dot"} />
-        AI agent
-      </div>
-      <div className="console-body">
-        {steps.length === 0 && <p className="empty">Press “Start agent”.</p>}
-        {steps.map((step, i) => (
-          <div className={`step step-${step.kind}`} key={i}>
-            <span className="step-kind">{STEP_LABEL[step.kind]}</span>
-            <span className="step-text">{step.text}</span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ExposedPanel({ executed, balance }: { executed: AgentExecutionDTO[]; balance: bigint }) {
-  return (
-    <section className="card">
-      <div className="panel-head">
-        <div>
-          <div className="panel-title">Without Agacy</div>
-          <div className="panel-note">Ordinary SPL transfers</div>
-        </div>
-        <span className="tag exposed">Fully public</span>
-      </div>
-
-      <div className="explorer">
-        <div className="explorer-label">What a stranger sees</div>
-        {executed.length === 0 ? (
-          <p className="empty">No transactions yet.</p>
-        ) : (
-          <>
-            {executed.map((tx, i) => (
-              <div className="row" key={i}>
-                <span className="row-key">{tx.recipient.slice(0, 10)}…</span>
-                <span className="row-val exposed">{formatTokens(tx.amount)} USDC</span>
-              </div>
-            ))}
-            <div className="row">
-              <span className="row-key">Balance</span>
-              <span className="row-val exposed">{formatTokens(balance)} USDC</span>
-            </div>
-            <div className="verdict exposed">
-              A stranger now knows this wallet holds <strong>{formatTokens(balance)} USDC</strong>,
-              what it buys, and who it pays.
-            </div>
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function ConfidentialPanel({
-  executed,
-  ownerView,
-  balance,
-}: {
-  executed: AgentExecutionDTO[];
-  ownerView: boolean;
-  balance: bigint;
-}) {
-  return (
-    <section className="card">
-      <div className="panel-head">
-        <div>
-          <div className="panel-title">With Agacy</div>
-          <div className="panel-note">Token-2022 confidential transfers</div>
-        </div>
-        <span className="tag private">Encrypted</span>
-      </div>
-
-      <div className="explorer">
-        <div className="explorer-label">What the same stranger sees</div>
-        {executed.length === 0 ? (
-          <p className="empty">No transactions yet.</p>
-        ) : (
-          <>
-            {executed.map((tx, i) => (
-              <div key={i}>
-                <div className="row">
-                  <span className="row-key">confirmed</span>
-                  <span className="row-val hidden">amount encrypted</span>
-                </div>
-                <div className="cipher">{ciphertextPreview(tx.amount, i)}</div>
-              </div>
-            ))}
-            <div className="row">
-              <span className="row-key">Balance</span>
-              <span className="row-val hidden">unreadable</span>
-            </div>
-            <div className="verdict private">
-              Every transaction is real, confirmed, and verifiable. The chain proved each one valid
-              without learning the amount. There is no balance here to target.
-            </div>
-          </>
-        )}
-      </div>
-
-      {ownerView && executed.length > 0 && (
-        <div className="owner-view">
-          <div className="owner-head">Decrypted with the owner&apos;s key</div>
-          {executed.map((tx, i) => (
-            <div key={i}>
-              <div className="row">
-                <span className="row-key">{tx.recipient.slice(0, 10)}…</span>
-                <span className="row-val">{formatTokens(tx.amount)} USDC</span>
-              </div>
-              <p className="reason">{tx.reasoning}</p>
-            </div>
-          ))}
-          <div className="row">
-            <span className="row-key">Balance</span>
-            <span className="row-val">{formatTokens(balance)} USDC</span>
-          </div>
-        </div>
-      )}
-    </section>
   );
 }

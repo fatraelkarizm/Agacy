@@ -1,4 +1,6 @@
-import { address, type Address, type KeyPairSigner } from "@solana/kit";
+import { address, type Address, type TransactionSigner } from "@solana/kit";
+import { getCreateAccountInstruction } from "@solana-program/system";
+import type { SolanaClient } from "./solana-client.js";
 
 /**
  * Client for the Agacy spend policy program.
@@ -23,7 +25,7 @@ const IX_UPDATE_LIMITS = 2;
 
 export interface InitializePolicyParams {
   readonly policyAccount: Address;
-  readonly owner: KeyPairSigner;
+  readonly owner: TransactionSigner;
   readonly agent: Address;
   readonly maxPerTransfer: bigint;
   readonly maxPerPeriod: bigint;
@@ -50,9 +52,57 @@ export function buildInitializePolicyInstruction(params: InitializePolicyParams)
   };
 }
 
+export interface ProvisionPolicyAccountParams {
+  /**
+   * Freshly generated per-agent account. Not derived from the owner's public
+   * key: ARCHITECTURE.md forbids a public parent -> agent mapping, so this is
+   * an ordinary generated keypair rather than a PDA seeded from the owner.
+   */
+  readonly policyAccount: TransactionSigner;
+  readonly owner: TransactionSigner;
+  readonly agent: Address;
+  readonly maxPerTransfer: bigint;
+  readonly maxPerPeriod: bigint;
+  readonly periodSeconds: bigint;
+}
+
+/**
+ * The two instructions that turn a spend-limit draft into a real on-chain
+ * account: allocate the space (System Program, owner pays rent) and hand it
+ * to the policy program to write the initial limits into. Kept as one call
+ * because the pair is only ever sent together — a created-but-uninitialized
+ * policy account is not a valid intermediate state anything should observe.
+ */
+export async function buildProvisionPolicyAccountInstructions(
+  client: SolanaClient,
+  params: ProvisionPolicyAccountParams,
+) {
+  const rent = await client.rpc
+    .getMinimumBalanceForRentExemption(BigInt(POLICY_ACCOUNT_LEN))
+    .send();
+
+  return [
+    getCreateAccountInstruction({
+      payer: params.owner,
+      newAccount: params.policyAccount,
+      lamports: rent,
+      space: BigInt(POLICY_ACCOUNT_LEN),
+      programAddress: POLICY_PROGRAM_ID,
+    }),
+    buildInitializePolicyInstruction({
+      policyAccount: params.policyAccount.address,
+      owner: params.owner,
+      agent: params.agent,
+      maxPerTransfer: params.maxPerTransfer,
+      maxPerPeriod: params.maxPerPeriod,
+      periodSeconds: params.periodSeconds,
+    }),
+  ];
+}
+
 export interface AuthorizeSpendParams {
   readonly policyAccount: Address;
-  readonly agent: KeyPairSigner;
+  readonly agent: TransactionSigner;
   readonly amount: bigint;
 }
 
@@ -77,7 +127,7 @@ export function buildAuthorizeSpendInstruction(params: AuthorizeSpendParams) {
 
 export interface UpdateLimitsParams {
   readonly policyAccount: Address;
-  readonly owner: KeyPairSigner;
+  readonly owner: TransactionSigner;
   readonly maxPerTransfer: bigint;
   readonly maxPerPeriod: bigint;
 }
