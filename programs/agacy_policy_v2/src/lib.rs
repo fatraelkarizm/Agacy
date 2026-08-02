@@ -60,4 +60,20 @@ pub mod agacy_policy_v2 {
     pub fn authorize(ctx: Context<Authorize>, amount: u64) -> Result<()> {
         crate::instructions::authorize::handle_authorize(ctx, amount)
     }
+
+    /// Policy-gated CPI: checks policy, then forwards `instruction_data` to
+    /// `target_program` with `ctx.remaining_accounts`, signing for the policy
+    /// PDA itself. See authorize_and_invoke.rs for exactly what this does and
+    /// does not prove.
+    pub fn authorize_and_invoke(
+        ctx: Context<AuthorizeAndInvoke>,
+        amount: u64,
+        instruction_data: Vec<u8>,
+    ) -> Result<()> {
+        crate::instructions::authorize_and_invoke::handle_authorize_and_invoke(
+            ctx,
+            amount,
+            instruction_data,
+        )
+    }
 }

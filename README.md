@@ -40,6 +40,12 @@ primitive Agacy uses, the same way any app uses SPL Token. The parts built for t
 - **A concrete, narrated adversarial model** (`buildAttackSimulation`) showing the actual mechanism
   under attack: the same scan an attacker or competitor would run reveals a target on an ordinary
   wallet and finds nothing to size on Agacy's.
+- **The policy program can be the token account's actual delegate, gating any CPI it forwards.**
+  `authorize_and_invoke` checks policy, then signs for the policy PDA via `invoke_signed` to forward
+  a transfer — proven in a simulated runtime (litesvm) by having it move real SPL tokens as a real
+  delegate, and refuse a transfer over the policy's limit even when the raw SPL delegate approval
+  was deliberately set higher. This is what makes the earlier "spend limits are unbypassable" claim
+  structural rather than aspirational — see the caveat below on what it still doesn't prove.
 
 ## How it works
 
@@ -57,12 +63,18 @@ the agent's reasoning for the action.
 - **Agent layer:** Solana Agent Kit
 - **App:** Next.js + TypeScript
 
-**Roadmap, explicitly not implemented:** delegate binding (making the policy program the token
-account's actual delegate via a PDA + CPI, so an agent structurally cannot call Token-2022 without
-going through policy) is designed but unbuilt — see `docs/PRIVACY_ARCHITECTURE.md` section 14 for
-the design and, just as importantly, what it would and wouldn't solve. Arcium-based confidential
-policy logic (hiding the limit values themselves) is a candidate for that same layer, evaluated but
-not started. Neither is claimed as working; both are future work, not partially-shipped features.
+**Delegate binding — verified in a simulated runtime, not yet on devnet.** `programs/agacy_policy_v2`
+compiles to a real `.so` and passes 11/11 Rust integration tests (litesvm), including the CPI
+delegate mechanism above. What that does and doesn't prove, precisely: it closes the *structural*
+bypass (an agent cannot spend without this program's policy check succeeding first, because it
+holds no other authority). It does **not** close the *confidential-amount-claim* gap — this program
+still cannot verify a caller-claimed amount matches an encrypted transfer's real value, which is why
+it's tested here against classic SPL Token, not Token-2022 confidential transfer specifically (that
+needs ZK proof-context accounts a simulated runtime doesn't provide out of the box). See
+`docs/PRIVACY_ARCHITECTURE.md` section 14 for the full design and this exact boundary. Not yet done:
+deployed to devnet, and wiring this same mechanism to Token-2022's confidential transfer instruction.
+Arcium-based confidential policy logic (hiding the limit values themselves) is a separate, unstarted
+candidate for the same layer.
 
 ## Verified on devnet
 

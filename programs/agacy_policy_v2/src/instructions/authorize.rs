@@ -25,9 +25,13 @@ pub struct Authorize<'info> {
 }
 
 pub fn handle_authorize(ctx: Context<Authorize>, amount: u64) -> Result<()> {
-    require!(amount > 0, PolicyError::ZeroAmount);
+    apply_policy_check(&mut ctx.accounts.policy, amount)
+}
 
-    let policy = &mut ctx.accounts.policy;
+/// Shared by `authorize` and `authorize_and_invoke` (authorize_and_invoke.rs)
+/// so the two enforcement paths can never silently drift apart.
+pub fn apply_policy_check(policy: &mut Policy, amount: u64) -> Result<()> {
+    require!(amount > 0, PolicyError::ZeroAmount);
     require!(
         amount <= policy.max_per_transfer,
         PolicyError::ExceedsPerTransferLimit
