@@ -63,18 +63,20 @@ the agent's reasoning for the action.
 - **Agent layer:** Solana Agent Kit
 - **App:** Next.js + TypeScript
 
-**Delegate binding — verified in a simulated runtime, not yet on devnet.** `programs/agacy_policy_v2`
-compiles to a real `.so` and passes 11/11 Rust integration tests (litesvm), including the CPI
-delegate mechanism above. What that does and doesn't prove, precisely: it closes the *structural*
-bypass (an agent cannot spend without this program's policy check succeeding first, because it
-holds no other authority). It does **not** close the *confidential-amount-claim* gap — this program
-still cannot verify a caller-claimed amount matches an encrypted transfer's real value, which is why
-it's tested here against classic SPL Token, not Token-2022 confidential transfer specifically (that
-needs ZK proof-context accounts a simulated runtime doesn't provide out of the box). See
-`docs/PRIVACY_ARCHITECTURE.md` section 14 for the full design and this exact boundary. Not yet done:
-deployed to devnet, and wiring this same mechanism to Token-2022's confidential transfer instruction.
-Arcium-based confidential policy logic (hiding the limit values themselves) is a separate, unstarted
-candidate for the same layer.
+**Delegate binding — compiled, tested, and deployed live to devnet.** `programs/agacy_policy_v2`
+passes 11/11 Rust integration tests (litesvm) proving the CPI delegate mechanism above, and is
+deployed at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet)
+(confirmed executable via `solana program show`). What this does and doesn't prove, precisely: it
+closes the *structural* bypass (an agent cannot spend without this program's policy check
+succeeding first, because it holds no other authority). It does **not** close the
+*confidential-amount-claim* gap — this program still cannot verify a caller-claimed amount matches
+an encrypted transfer's real value, which is why it's tested against classic SPL Token, not
+Token-2022 confidential transfer specifically (that needs ZK proof-context accounts a simulated
+runtime doesn't provide out of the box). See `docs/PRIVACY_ARCHITECTURE.md` section 14 for the full
+design and this exact boundary. Not yet done: a live devnet call exercising this deployed instance
+(litesvm already exhaustively tests the identical compiled bytecode), and wiring the same mechanism
+to Token-2022's confidential transfer instruction specifically. Arcium-based confidential policy
+logic (hiding the limit values themselves) is a separate, unstarted candidate for the same layer.
 
 ## Verified on devnet
 
