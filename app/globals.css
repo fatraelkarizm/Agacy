@@ -477,3 +477,52 @@ h1 br {
 @media (min-width: 720px) {
   h1 br { display: block; }
 }
+
+/* ---------- devnet proof band ---------- */
+
+.proof-band {
+  border-top: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(61, 220, 151, 0.045), transparent 60%);
+  padding: 72px 0 80px;
+}
+
+.proof-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-top: 34px;
+}
+
+.proof-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 16px 18px;
+}
+
+.proof-label {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 9px;
+}
+
+.proof-value {
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  color: var(--accent);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.proof-value:hover {
+  text-decoration: underline;
+}
+
+.proof-verdict {
+  font-family: var(--mono);
+  font-size: 0.95rem;
+  color: var(--private);
+}

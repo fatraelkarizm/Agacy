@@ -1,0 +1,12 @@
+{
+  "capturedAt": "2026-08-02T03:30:12.357Z",
+  "cluster": "devnet",
+  "mint": "2rhj95tELtQKMEnTSgaZem3udLHhFj8Fr9EStFCscrsd",
+  "senderAccount": "4dbYHAVZdz1f4KaiQJcfqmVqXNFKqgSAYhL9us93fUHo",
+  "recipientAccount": "5veYzD4zZzwtN7VUR9mwUQJD5MerRq1bZttFKhv7fCno",
+  "depositSignature": "diTuTVeVLHVYwPu6LTm7xsxWsm2TL1nDvx5vqB4wmguQjCQwU5F1zBvmmVaJWbfp7N2kjYL9zuULcJAQQbmcBqC",
+  "transferSignature": "5vTuKeoULGc26FdNoxCVErWbYzet1jReDhgRqvp2Le9erDsWTx8p4P4VCGotC9mwFHaifazLeAbzq2mpCLwqAEtz",
+  "transferAmount": "2500000",
+  "remainingBalance": "7500000",
+  "amountFoundInRecipientAccountData": false
+}

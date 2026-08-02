@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import { runAgent, type AgentStep, type AgentTask } from "../agent/loop";
 import type { SpendPolicyDTO } from "../server/dto/agent.dto";
 import { ciphertextPreview, formatTokens } from "../server/services/demo-scenario";
+import devnetProof from "../server/data/devnet-proof.json";
 
 const POLICY: SpendPolicyDTO = {
   maxPerTransfer: 20_000_000n,
@@ -152,6 +153,29 @@ export default function Home() {
         </div>
       </main>
 
+      <section className="proof-band">
+        <div className="wrap">
+          <h2>Not a mockup — verified on devnet.</h2>
+          <p className="section-sub">
+            The flow above runs for real on Solana devnet. Below is an actual confidential transfer
+            this codebase executed: the transaction is public and confirmed, and the transferred
+            amount is provably absent from the recipient&apos;s account data.
+          </p>
+
+          <div className="proof-grid">
+            <ProofItem label="Transfer transaction" value={devnetProof.transferSignature} link />
+            <ProofItem label="Confidential mint" value={devnetProof.mint} link />
+            <ProofItem label="Recipient account" value={devnetProof.recipientAccount} link />
+            <div className="proof-item">
+              <div className="proof-label">Amount readable on-chain</div>
+              <div className="proof-verdict">
+                {devnetProof.amountFoundInRecipientAccountData ? "yes" : "no — encrypted"}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <footer className="foot">
         <div className="wrap">
           The blocked payment is not the model changing its mind — the agent still proposes it. The
@@ -161,6 +185,29 @@ export default function Home() {
         </div>
       </footer>
     </>
+  );
+}
+
+function ProofItem({ label, value, link }: { label: string; value: string; link?: boolean }) {
+  const base = "https://explorer.solana.com";
+  const href = base + "/address/" + value + "?cluster=devnet";
+  const txHref = base + "/tx/" + value + "?cluster=devnet";
+  return (
+    <div className="proof-item">
+      <div className="proof-label">{label}</div>
+      {link ? (
+        <a
+          className="proof-value"
+          href={label.includes("transaction") ? txHref : href}
+          target="_blank"
+          rel="noreferrer"
+        >
+          {value.slice(0, 22)}…
+        </a>
+      ) : (
+        <div className="proof-value">{value}</div>
+      )}
+    </div>
   );
 }
 
