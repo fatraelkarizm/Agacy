@@ -1,3 +1,7 @@
+[workspace]
+# Empty table: isolates this crate from the new Anchor workspace under /programs,
+# which uses a different Solana dependency graph (anchor-lang vs raw solana-program).
+
 [package]
 name = "agacy-policy"
 version = "0.1.0"
