@@ -180,8 +180,33 @@ That is a serious amount of power to hand a program, and the honest part is what
 
 What this still does **not** close: the program cannot decrypt a transfer to confirm the amount it
 was told about is the amount that actually moves. It bounds what kind of action can happen, not the
-value inside an encrypted one. Hiding the limit values themselves — so the policy is private too,
-not just the payments — is a separate, unstarted candidate for the same layer.
+value inside an encrypted one.
+
+### A limit the program itself cannot read
+
+The payments were private, but the *budget* was not. A visible "$20 per transfer, $50 per week"
+sizes a target before an attacker tries anything — so the limits are now encrypted too.
+
+The program never compares two numbers, because it cannot see either one. It subtracts the
+encrypted amount from the encrypted limit — arithmetic that works fine on ciphertexts — and then
+requires a proof that the result is not negative. "Within budget" and "that difference is
+non-negative" are the same statement, and a false statement simply has no proof. The running total
+for the period is accumulated the same way, so how much an agent has already spent stays hidden as
+well.
+
+None of the verifying happens here. Solana already runs a proof verifier; this program's job is to
+confirm the proof it was handed really came from that verifier, and really describes the subtraction
+it just did itself rather than one the caller would have preferred.
+
+That last part is the whole game, so it is what the verification hammers on. Real, valid proofs for
+a 1-token payment, submitted alongside an encrypted 25-token amount, are rejected — a program that
+trusted its caller would have waved them through. An ordinary account passed off as a proof is
+rejected. And the limit's absence is confirmed by searching the raw on-chain bytes for it, not by
+asserting it.
+
+Worth being precise about who this hides from: the public, not the agent. Proving requires the key,
+so whoever proves can also read the budget — which is the point, since an agent needs to know what
+it may spend. A block explorer does not.
 
 ### Verified on devnet
 
@@ -192,6 +217,7 @@ not just the payments — is a separate, unstarted candidate for the same layer.
 | Transferred amount readable on-chain | **No** — verified by reading the recipient account bytes |
 | Agent's reasoning readable on-chain | **No** — encrypted, carried in a memo, verified by reading the raw transaction bytes back from devnet |
 | Confidential transfer signed by the policy program | **Yes** — under a real spend limit, with an over-limit attempt and an attempt to seize the account both rejected by the running program |
+| Spend limit readable on-chain | **No** — encrypted, and enforced anyway; verified by searching the raw account bytes for the value |
 
 Re-run `npm run capture-proof` to re-verify the privacy claims against a fresh transaction, or
 `npm run verify-custody` to re-run the whole custody sequence — handover, a real policy-gated
@@ -247,6 +273,7 @@ npm test                        # unit tests
 npm run test:integration        # devnet round trip (needs AGACY_RPC_URL)
 npm run capture-proof           # re-record the on-chain evidence
 npm run verify-custody          # re-run the whole custody sequence against fresh devnet accounts
+npm run verify-confidential-limits # re-run the hidden-limit checks, including the replay attack
 npm run verify-delegate-binding # re-verify delegate binding against a fresh devnet transfer
 npm run agent                   # run the autonomous agent against real devnet (needs LLM_API_KEY)
 npm run agent:mainnet           # same agent, mainnet swap capability enabled (needs the 4 vars above)
