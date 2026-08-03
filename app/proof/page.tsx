@@ -1,7 +1,14 @@
 "use client";
 
 import devnetProof from "../../server/data/devnet-proof.json";
+import autonomousProof from "../../server/data/autonomous-agent-proof.json";
 import { POLICY_PROGRAM_ID } from "../../server/data/policy-program";
+
+interface AutonomousStep {
+  readonly tool: string;
+  readonly outcome: "allowed" | "refused";
+  readonly reason?: string;
+}
 
 /**
  * Its own route rather than a `stage` on `/`: the whole point of this page is
@@ -59,7 +66,131 @@ export default function ProofPage() {
           </div>
         </div>
       </div>
+
+      <div className="step-head" style={{ marginTop: "2.5rem" }}>
+        <h3>The agent chose its own moves — not a script.</h3>
+        <p className="section-sub">
+          Given a goal, not a task list, the model below picked its own tools, sequence, and
+          stopping point. Two real runs against live devnet, captured the same way as the evidence
+          above — re-run <code>npm run agent</code> any time to refresh this against a fresh model call.
+        </p>
+      </div>
+
+      <div className="proof-item" style={{ marginBottom: "1rem" }}>
+        <div className="proof-label">Goal given to the agent</div>
+        <div className="proof-verdict" style={{ fontSize: "0.85rem", fontWeight: 400 }}>
+          {autonomousProof.phase1.goal}
+        </div>
+      </div>
+      <AutonomousConsole steps={autonomousProof.phase1.steps as AutonomousStep[]} />
+      <div className="proof-grid" style={{ marginTop: "14px" }}>
+        {autonomousProof.landedPayments[0] && (
+          <ProofItem label="Real payment transaction" value={autonomousProof.landedPayments[0].signature} isTx />
+        )}
+        <div className="proof-item">
+          <div className="proof-label">Vendor's decrypted balance matches what the run reported</div>
+          <div className="proof-verdict">
+            {autonomousProof.phase1.verifiedAgainstOnChainBalance ? "yes, verified" : "MISMATCH"}
+          </div>
+        </div>
+      </div>
+
+      <div className="step-head" style={{ marginTop: "2.5rem" }}>
+        <h3>Then it was asked to pay more than its budget allowed.</h3>
+        <p className="section-sub">
+          The second goal deliberately exceeds the remaining period limit, however the payment is
+          split. The agent tried anyway — the log below is unedited, including every repeated
+          attempt.
+        </p>
+      </div>
+
+      <div className="proof-item" style={{ marginBottom: "1rem" }}>
+        <div className="proof-label">Goal given to the agent</div>
+        <div className="proof-verdict" style={{ fontSize: "0.85rem", fontWeight: 400 }}>
+          {autonomousProof.phase2.goal}
+        </div>
+      </div>
+      <AutonomousConsole steps={autonomousProof.phase2.steps as AutonomousStep[]} />
+
+      <div className="proof-grid" style={{ marginTop: "14px" }}>
+        <div className="proof-item">
+          <div className="proof-label">Amount requested vs. actually paid</div>
+          <div className="proof-verdict">
+            {formatTokens(autonomousProof.phase2.amountRequested)} requested,{" "}
+            {formatTokens(autonomousProof.phase2.amountActuallyPaid)} paid
+          </div>
+        </div>
+        <div className="proof-item">
+          <div className="proof-label">Period total vs. limit</div>
+          <div className="proof-verdict">
+            {formatTokens(autonomousProof.phase2.periodTotalAfter)} of {formatTokens(autonomousProof.phase2.periodLimit)}
+          </div>
+        </div>
+        <div className="proof-item">
+          <div className="proof-label">Refused attempts</div>
+          <div className="proof-verdict">{autonomousProof.phase2.refusalCount}</div>
+        </div>
+        <div className="proof-item">
+          <div className="proof-label">Vendor's decrypted balance matches what the run reported</div>
+          <div className="proof-verdict">
+            {autonomousProof.phase2.verifiedAgainstOnChainBalance ? "yes, verified" : "MISMATCH"}
+          </div>
+        </div>
+      </div>
+
+      <div className="proof-item" style={{ marginTop: "14px" }}>
+        <div className="proof-label">The agent&apos;s own closing summary — not proof by itself</div>
+        <div className="proof-verdict" style={{ fontSize: "0.85rem", fontWeight: 400 }}>
+          {autonomousProof.phase2.modelSummary.trim().length > 0
+            ? autonomousProof.phase2.modelSummary
+            : "(empty — this particular run spent all its steps retrying the refused request and never " +
+              "produced a closing summary at all. Which is exactly the point: the numbers above come " +
+              "from decrypting the vendor's real balance, not from asking the model what happened.)"}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** Collapses runs of identical consecutive steps (a model retrying the same refused call) into one row with a count, rather than rendering each attempt separately. */
+function groupConsecutiveSteps(steps: readonly AutonomousStep[]) {
+  const groups: { step: AutonomousStep; count: number }[] = [];
+  for (const step of steps) {
+    const last = groups[groups.length - 1];
+    if (last && last.step.tool === step.tool && last.step.outcome === step.outcome && last.step.reason === step.reason) {
+      last.count += 1;
+    } else {
+      groups.push({ step, count: 1 });
+    }
+  }
+  return groups;
+}
+
+function formatTokens(baseUnits: string): string {
+  return (Number(baseUnits) / 1_000_000).toString();
+}
+
+function AutonomousConsole({ steps }: { steps: readonly AutonomousStep[] }) {
+  const groups = groupConsecutiveSteps(steps);
+  return (
+    <section className="card console" style={{ position: "static" }}>
+      <div className="console-head">
+        <span className="dot" />
+        Agent tool calls ({steps.length} total)
+      </div>
+      <div className="console-body" style={{ maxHeight: "420px" }}>
+        {groups.map((group, i) => (
+          <div className={`step step-${group.step.outcome === "allowed" ? "execute" : "refused"}`} key={i}>
+            <span className="step-kind">{group.step.outcome === "allowed" ? "runs" : "blocked"}</span>
+            <span className="step-text">
+              {group.step.tool}
+              {group.step.reason ? ` — ${group.step.reason}` : ""}
+              {group.count > 1 ? ` (×${group.count})` : ""}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

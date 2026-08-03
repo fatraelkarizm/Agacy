@@ -1,4 +1,5 @@
 import "../tests/setup-env.js";
+import { writeFileSync } from "node:fs";
 import { Connection, Keypair } from "@solana/web3.js";
 import { SolanaAgentKit } from "solana-agent-kit";
 import type { SpendPolicyDTO } from "../server/dto/agent.dto.js";
@@ -87,7 +88,7 @@ async function runDevnet(): Promise<void> {
     {},
   );
 
-  const effects = buildDevnetEffects({
+  const rawEffects = buildDevnetEffects({
     client,
     payer,
     senderAccount,
@@ -96,6 +97,24 @@ async function runDevnet(): Promise<void> {
     reasoningSeedSignature: new Uint8Array(64).fill(33),
     recipientAccounts: new Map([[recipientAccount, { pubkey: recipientKeys.elGamal.pubkey() }]]),
   });
+
+  // Wrapped only so this script can capture real signatures for the UI proof
+  // page below — the agent/ modules stay unaware this is happening, since
+  // recording evidence is this script's concern, not the effect's.
+  const landedPayments: { signature: string; amount: string; recipient: string; reasoning: string }[] = [];
+  const effects = {
+    ...rawEffects,
+    payConfidentially: async (input: Parameters<typeof rawEffects.payConfidentially>[0]) => {
+      const result = await rawEffects.payConfidentially(input);
+      landedPayments.push({
+        signature: result.signature,
+        amount: input.amount.toString(),
+        recipient: input.recipient,
+        reasoning: input.reasoning,
+      });
+      return result;
+    },
+  };
 
   console.log("=== Phase 1: in-policy payment — the model should pay and succeed ===\n");
   const goal1 =
@@ -239,6 +258,46 @@ async function runDevnet(): Promise<void> {
     `how the request was split, independently verified against the vendor's own decrypted balance, ` +
     `not the model's summary.`,
   );
+
+  // Captured the same way capture-devnet-proof.ts captures its own evidence:
+  // real signatures and real decrypted balances, written once so the /proof
+  // page can render this run without needing a live agent call on every page
+  // load. Re-run this script any time to refresh it against a fresh run.
+  const proof = {
+    capturedAt: new Date().toISOString(),
+    cluster: "devnet",
+    ownerAddress: payer.address,
+    vendorAccount: recipientAccount,
+    policy: { maxPerTransfer: POLICY.maxPerTransfer.toString(), maxPerPeriod: POLICY.maxPerPeriod.toString() },
+    phase1: {
+      goal: goal1,
+      steps: result1.steps,
+      modelSummary: result1.summary,
+      amountPaid: result1.spentThisPeriod.toString(),
+      vendorBalanceAfter: balanceAfterPhase1.availableBalance.toString(),
+      verifiedAgainstOnChainBalance: phase1Verified,
+    },
+    phase2: {
+      goal: goal2,
+      steps: result2.steps,
+      modelSummary: result2.summary,
+      amountRequested: requestedAmount.toString(),
+      amountActuallyPaid: phase2Spend.toString(),
+      periodTotalAfter: result2.spentThisPeriod.toString(),
+      periodLimit: POLICY.maxPerPeriod.toString(),
+      refusalCount: result2.refusals.length,
+      vendorBalanceAfter: balanceAfterPhase2.availableBalance.toString(),
+      verifiedAgainstOnChainBalance: phase2Verified,
+      // The model's own summary text is included for comparison — in one
+      // captured run it confidently reported the wrong total ("164 tokens"
+      // instead of the real, verified 45.8), which is exactly why every
+      // number above comes from decrypting the vendor's own balance, not
+      // from this text.
+    },
+    landedPayments,
+  };
+  writeFileSync("server/data/autonomous-agent-proof.json", JSON.stringify(proof, null, 2) + "\n");
+  console.log("\nsaved -> server/data/autonomous-agent-proof.json");
 }
 
 async function runMainnet(): Promise<void> {
