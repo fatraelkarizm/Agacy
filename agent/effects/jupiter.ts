@@ -21,8 +21,16 @@ import {
  * simulating.
  */
 
-const QUOTE_API = "https://quote-api.jup.ag/v6";
-const PRICE_API = "https://api.jup.ag/price/v2";
+// Both of these were caught by actually calling them, not by reading docs:
+// quote-api.jup.ag/v6 (this file's original endpoint) and price/v2 are both
+// retired as of Jupiter's October 1st deprecation — the old quote host no
+// longer resolves in DNS at all, and the old price host 404s. lite-api's
+// free tier replaces both with no API key required for the volumes this
+// project needs.
+const QUOTE_API = "https://lite-api.jup.ag/swap/v1";
+// v3's response shape also differs from v2: no `data` wrapper, and the
+// field is `usdPrice`, not `price`.
+const PRICE_API = "https://api.jup.ag/price/v3";
 
 export interface JupiterQuote {
   readonly inAmount: string;
@@ -37,9 +45,9 @@ export async function fetchTokenPrice(mint: string): Promise<{ mint: string; pri
   if (!response.ok) {
     throw new Error(`Jupiter price lookup failed: ${response.status} ${response.statusText}`);
   }
-  const body = (await response.json()) as { data?: Record<string, { price?: string } | undefined> };
-  const price = body.data?.[mint]?.price;
-  return { mint, priceUsd: price === undefined ? null : Number(price) };
+  const body = (await response.json()) as Record<string, { usdPrice?: number } | undefined>;
+  const price = body[mint]?.usdPrice;
+  return { mint, priceUsd: price === undefined ? null : price };
 }
 
 export async function fetchSwapQuote(input: {
