@@ -352,8 +352,12 @@ export default function DashboardPage() {
             <div>
               <h2>Watch {agent.name} work.</h2>
               <p>
-                The agent proposes each payment. The policy check runs outside the model before
-                value moves.
+                A scripted walkthrough of the decision flow, over a fixed set of vendors — so it
+                runs the same way every time, with no API key and no funds at risk. The policy
+                verdicts are the real engine, so the refusal below is a genuine evaluation rather
+                than a staged one. Nothing here is broadcast to a cluster. The real agent — an
+                actual model choosing its own tools, paying real devnet accounts — runs from the
+                terminal, and its recorded output is on the proof page.
               </p>
             </div>
             <span className="hint">
@@ -371,9 +375,10 @@ export default function DashboardPage() {
               >
                 {provisionedPolicy.policyAccount.slice(0, 8)}…
               </a>{" "}
-              with these limits. The run below still checks policy locally — the agent does not yet
-              sign a real per-transfer <code>authorize</code> call against this account (delegate
-              binding, tracked in FEATURES.md, is what closes that gap).
+              with these limits — that account is real, and you can open it. The walkthrough below
+              does not sign against it: it uses a throwaway agent key, and keeping a real one is a
+              key-custody decision this build deliberately leaves open. The enforcement path itself
+              is built and verified on devnet — see the proof page.
             </p>
           )}
 

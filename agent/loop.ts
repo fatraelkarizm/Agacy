@@ -130,9 +130,15 @@ export async function runAgent(options: RunAgentOptions): Promise<AgentRunResult
     }
 
     await emit({ kind: "policy", text: "Within the owner's spend policy." });
+    // Says "cleared", not "sent", because nothing is sent here — this loop has
+    // no executor and never touches a cluster. It previously claimed the
+    // amount was "encrypted on-chain", which was simply untrue and would not
+    // survive anyone opening an explorer. The policy verdict above *is* real:
+    // it comes from the same `evaluateSpendPolicy` the rest of the codebase
+    // uses. Real payments run through agent/autonomous-loop.ts.
     await emit({
       kind: "execute",
-      text: `Sent confidentially. The amount is encrypted on-chain.`,
+      text: "Cleared by policy. This walkthrough stops here — no transaction is signed.",
       amount: decision.proposedAmount,
       recipient: decision.recipient,
     });
