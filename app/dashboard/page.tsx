@@ -26,6 +26,12 @@ import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
 import { runAgentOnChain } from "../../server/services/agent-run";
+import {
+  ATTACKS,
+  runAttack,
+  type AttackDefinition,
+  type AttackResult,
+} from "../../server/services/agent-attacks";
 import { fetchOnChainPolicyStatus } from "../../server/services/spend-policy";
 import { createDevnetClient } from "../../server/data/solana-client";
 import type { OnChainPolicyStatusDTO } from "../../server/dto/agent.dto";
@@ -138,6 +144,8 @@ export default function DashboardPage() {
    * rather than silently falling back to a fake run.
    */
   const agentSignerRef = useRef<KeyPairSigner | null>(null);
+  const [attackResults, setAttackResults] = useState<Record<string, AttackResult>>({});
+  const [attackRunning, setAttackRunning] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setRunError(null);
@@ -363,6 +371,41 @@ export default function DashboardPage() {
     setDone(true);
   }, [agent, ownerWallet, policy, provisionedPolicy, reset]);
 
+  /**
+   * Runs one attack for real and stores whatever the chain said. Nothing here
+   * decides the outcome — if an attack ever lands, it is reported as a breach.
+   */
+  const runOneAttack = useCallback(
+    async (attack: AttackDefinition) => {
+      const agentSigner = agentSignerRef.current;
+      if (!ownerWallet || !provisionedPolicy || !agentSigner || !policy) return;
+
+      setAttackRunning(attack.id);
+      try {
+        const result = await runAttack({
+          client: devnetClient,
+          ownerWallet,
+          policyAccount: address(provisionedPolicy.policyAccount),
+          agentSigner,
+          maxPerTransfer: policy.maxPerTransfer,
+          attack,
+        });
+        setAttackResults((prev) => ({ ...prev, [attack.id]: result }));
+      } catch (error) {
+        setAttackResults((prev) => ({
+          ...prev,
+          [attack.id]: {
+            status: "inconclusive",
+            detail: error instanceof Error ? error.message : "The attack could not be sent.",
+          },
+        }));
+      } finally {
+        setAttackRunning(null);
+      }
+    },
+    [ownerWallet, policy, provisionedPolicy],
+  );
+
   if (checkingSession || !ownerWallet) {
     return (
       <div className="wrap step-page">
@@ -453,8 +496,8 @@ export default function DashboardPage() {
             <button onClick={() => setOwnerView(!ownerView)} disabled={executed.length === 0}>
               {ownerView ? "Hide owner view" : "View as owner"}
             </button>
-            <button onClick={() => setShowAttackSim(!showAttackSim)} disabled={executed.length === 0}>
-              {showAttackSim ? "Hide attacker simulation" : "Simulate attacker"}
+            <button onClick={() => setShowAttackSim(!showAttackSim)}>
+              {showAttackSim ? "Hide attacks" : "Attack this agent"}
             </button>
             {done && <button onClick={() => router.push("/proof")}>See on-chain proof</button>}
             <button onClick={() => setDashboardSection("overview")}>Back to overview</button>
@@ -474,6 +517,16 @@ export default function DashboardPage() {
           </div>
 
           {showAttackSim && (
+            <AttackConsole
+              attacks={ATTACKS}
+              results={attackResults}
+              running={attackRunning}
+              disabled={!agentSignerRef.current}
+              onRun={(attack) => void runOneAttack(attack)}
+            />
+          )}
+
+          {showAttackSim && executed.length > 0 && (
             <AttackSimulationPanel
               steps={buildAttackSimulation(
                 executed,
@@ -635,6 +688,86 @@ function ConfidentialPanel({
       )}
     </section>
   );
+}
+
+/**
+ * Each row is a real transaction the owner can fire at their own agent.
+ *
+ * The verdict text comes from the chain, never from this component — a badge
+ * that always says "blocked" would be decoration. A breach renders as a breach,
+ * with the signature, because an attack demo that cannot fail proves nothing.
+ */
+function AttackConsole({
+  attacks,
+  results,
+  running,
+  disabled,
+  onRun,
+}: {
+  attacks: readonly AttackDefinition[];
+  results: Record<string, AttackResult>;
+  running: string | null;
+  disabled: boolean;
+  onRun: (attack: AttackDefinition) => void;
+}) {
+  return (
+    <section className="card">
+      <div className="panel-head">
+        <div>
+          <div className="panel-title">Attack this agent</div>
+          <div className="panel-note">
+            Real transactions, sent to devnet. Every verdict is the program&apos;s.
+          </div>
+        </div>
+      </div>
+      <div className="console-body">
+        {attacks.map((attack) => {
+          const result = results[attack.id];
+          const busy = running === attack.id;
+          return (
+            <div className={`step step-${verdictClass(result)}`} key={attack.id}>
+              <span className="step-kind">{verdictLabel(result, busy)}</span>
+              <span className="step-text">
+                <strong>{attack.goal}</strong>
+                <br />
+                {attack.method}
+                {result && (
+                  <>
+                    <br />
+                    <span style={{ opacity: 0.62 }}>
+                      {result.status === "blocked"
+                        ? `${result.detail} (error ${result.code})`
+                        : result.status === "breached"
+                          ? "This attack succeeded. The defence did not hold."
+                          : result.detail}
+                    </span>
+                  </>
+                )}
+              </span>
+              <button onClick={() => onRun(attack)} disabled={busy || disabled}>
+                {busy ? "Sending…" : result ? "Run again" : "Run attack"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function verdictClass(result: AttackResult | undefined): string {
+  if (!result) return "decide";
+  if (result.status === "blocked") return "refused";
+  if (result.status === "breached") return "execute";
+  return "observe";
+}
+
+function verdictLabel(result: AttackResult | undefined, busy: boolean): string {
+  if (busy) return "running";
+  if (!result) return "ready";
+  if (result.status === "blocked") return "blocked";
+  if (result.status === "breached") return "BREACH";
+  return "unclear";
 }
 
 function AttackSimulationPanel({ steps }: { steps: readonly AttackStepDTO[] }) {
