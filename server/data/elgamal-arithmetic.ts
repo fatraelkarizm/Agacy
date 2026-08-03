@@ -66,6 +66,32 @@ function addPoints(a: Uint8Array, b: Uint8Array): Uint8Array {
   return RistrettoPoint.fromBytes(a).add(RistrettoPoint.fromBytes(b)).toBytes();
 }
 
+/**
+ * Compute `left + right` as ElGamal ciphertexts.
+ *
+ * Used by the confidential spend-limit check to grow an encrypted
+ * spent-this-period total without ever decrypting it — the client derives the
+ * same sum the policy program derives on-chain, so the two agree byte for byte
+ * or the proof over it is refused. See confidential-limits.ts.
+ */
+export function addCiphertexts(
+  left: ElGamalCiphertext,
+  right: ElGamalCiphertext,
+): ElGamalCiphertext {
+  const l = splitCiphertext(left.toBytes());
+  const r = splitCiphertext(right.toBytes());
+
+  const result = new Uint8Array(CIPHERTEXT_BYTES);
+  result.set(addPoints(l.commitment, r.commitment), 0);
+  result.set(addPoints(l.handle, r.handle), POINT_BYTES);
+
+  const ciphertext = ElGamalCiphertext.fromBytes(result);
+  if (!ciphertext) {
+    throw new Error("Ciphertext addition produced invalid bytes");
+  }
+  return ciphertext;
+}
+
 function scalePoint(point: Uint8Array, scalar: bigint): Uint8Array {
   return RistrettoPoint.fromBytes(point).multiply(scalar).toBytes();
 }

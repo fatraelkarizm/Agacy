@@ -1,0 +1,58 @@
+{
+  "capturedAt": "2026-08-03T10:36:30.149Z",
+  "cluster": "devnet",
+  "programId": "9sYKkYh1GTKY2whkGPGXuG1VKiYqfiwyjVcpQbYtHtwW",
+  "ownerAddress": "5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5",
+  "agentAddress": "7qNmBZ1FpLbALBo8xdgvDv7HsHiyxoiuTtSvZBvyUPFY",
+  "policyAccount": "Fji5XJVuy31wv952agsDiDaQPFvKJxFukvP9amux2Ucc",
+  "limits": {
+    "maxPerTransfer": "20000000",
+    "maxPerPeriod": "50000000",
+    "note": "Recorded here for the reader only. On-chain these exist solely as ciphertexts."
+  },
+  "authorizeSignature": "P9GHy7SVdHZCwjfi596V1A8nGquRTAZUA6N8n7stSRYuz66gtXtBL6mkxBV3ZE1aC2two2s9XiGftenUNpNNwaw",
+  "checks": [
+    {
+      "step": "the policy now carries encrypted limits instead of readable ones",
+      "expected": "confidential limits present, under the owner's ElGamal key",
+      "observed": "present (pubkey ec9713764d23…)",
+      "ok": true
+    },
+    {
+      "step": "the limit value cannot be read out of the account's confidential fields",
+      "expected": "20000000 not present in the ciphertext region",
+      "observed": "not found — encrypted",
+      "ok": true
+    },
+    {
+      "step": "an in-policy spend is authorized against limits the program cannot read",
+      "expected": "authorized, and the encrypted period total moves off zero",
+      "observed": "authorized (P9GHy7SVdHZCwjfi…), spent-total changed: true",
+      "ok": true
+    },
+    {
+      "step": "an over-limit spend cannot even be given a proof",
+      "expected": "proof generation refuses — the statement is false, so no proof exists",
+      "observed": "Transfer of 25000000 exceeds the per-transfer limit — no pro",
+      "ok": true
+    },
+    {
+      "step": "valid proofs for a 1-token spend cannot be replayed to authorize a 25-token one",
+      "expected": "rejected with ProofDoesNotCoverThisStatement (6017)",
+      "observed": "error 6017",
+      "ok": true
+    },
+    {
+      "step": "an account that is not the verifier's output is refused as a proof",
+      "expected": "rejected with ProofAccountNotFromVerifier (6013)",
+      "observed": "error 6013",
+      "ok": true
+    },
+    {
+      "step": "the old plaintext limit path refuses instead of enforcing a stale copy",
+      "expected": "rejected with ConfidentialLimitsRequired (6019)",
+      "observed": "error 6019",
+      "ok": true
+    }
+  ]
+}

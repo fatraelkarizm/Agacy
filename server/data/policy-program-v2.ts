@@ -57,14 +57,19 @@ const IX_AUTHORIZE_AND_INVOKE = new Uint8Array([225, 250, 173, 251, 78, 28, 228,
 const IX_ASSUME_CUSTODY = new Uint8Array([66, 21, 51, 89, 235, 111, 62, 113]);
 const IX_RELEASE_CUSTODY = new Uint8Array([162, 202, 238, 72, 152, 95, 225, 156]);
 const IX_CUSTODY_MAINTENANCE = new Uint8Array([117, 21, 50, 68, 202, 37, 46, 177]);
+const IX_SET_CONFIDENTIAL_LIMITS = new Uint8Array([48, 95, 194, 12, 110, 155, 5, 225]);
+const IX_AUTHORIZE_CONFIDENTIAL = new Uint8Array([180, 29, 41, 254, 192, 166, 42, 212]);
+const IX_AUTHORIZE_CONFIDENTIAL_AND_INVOKE = new Uint8Array([43, 28, 194, 169, 192, 58, 143, 70]);
 const ACCOUNT_POLICY = new Uint8Array([222, 135, 7, 163, 235, 177, 33, 68]);
 
 /**
  * discriminator(8) + owner(32) + agent(32) + 5 numeric fields(40) + bump(1)
- * + custodied_token_account(32). Must match
- * programs/agacy_policy_v2/src/state.rs.
+ * + custodied_token_account(32) + limit_pubkey(32) + three ciphertexts(64 each).
+ * Must match programs/agacy_policy_v2/src/state.rs.
  */
-export const POLICY_V2_ACCOUNT_LEN = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 32;
+export const POLICY_V2_ACCOUNT_LEN = 8 + 32 + 32 + 8 + 8 + 8 + 8 + 8 + 1 + 32 + 32 + 64 * 3;
+
+const CONFIDENTIAL_FIELDS_AT = 145;
 
 /** `Pubkey::default()` in the program — its "no custody held" sentinel. */
 const NO_CUSTODY = "11111111111111111111111111111111";
@@ -314,6 +319,141 @@ export function buildCustodyMaintenanceInstruction(params: CustodyMaintenancePar
   };
 }
 
+/** Solana's deployed proof verifier — every context account must be its output. */
+export const ZK_ELGAMAL_PROOF_PROGRAM_ID = address("ZkE1Gama1Proof11111111111111111111111111111");
+
+export interface SetConfidentialLimitsParams {
+  readonly policyAccount: Address;
+  readonly owner: TransactionSigner;
+  /** 32-byte ElGamal pubkey the two ciphertexts below are encrypted under. */
+  readonly limitPubkey: Uint8Array;
+  readonly maxPerTransferCt: Uint8Array;
+  readonly maxPerPeriodCt: Uint8Array;
+}
+
+/**
+ * Replace a policy's visible limits with encrypted ones.
+ *
+ * One-directional by intent: there is no instruction to reveal them again,
+ * because ciphertexts an observer already recorded do not become private
+ * retroactively. Calling this again re-encrypts under a fresh key, which is the
+ * operation that actually means something.
+ */
+export function buildSetConfidentialLimitsInstruction(params: SetConfidentialLimitsParams) {
+  requireLength(params.limitPubkey, 32, "limitPubkey");
+  requireLength(params.maxPerTransferCt, 64, "maxPerTransferCt");
+  requireLength(params.maxPerPeriodCt, 64, "maxPerPeriodCt");
+
+  const data = new Uint8Array(8 + 32 + 64 + 64);
+  data.set(IX_SET_CONFIDENTIAL_LIMITS, 0);
+  data.set(params.limitPubkey, 8);
+  data.set(params.maxPerTransferCt, 40);
+  data.set(params.maxPerPeriodCt, 104);
+
+  return {
+    programAddress: POLICY_V2_PROGRAM_ID,
+    accounts: [
+      { address: params.policyAccount, role: WRITABLE },
+      { address: params.owner.address, role: READONLY_SIGNER, signer: params.owner },
+    ],
+    data,
+  };
+}
+
+export interface ConfidentialProofAccounts {
+  /** Proves `max_per_transfer - amount` is the value in the range proof's first commitment. */
+  readonly transferEqualityProof: Address;
+  /** Proves `max_per_period - (spent + amount)` is the second. */
+  readonly periodEqualityProof: Address;
+  /** Proves both committed differences are non-negative. */
+  readonly rangeProof: Address;
+}
+
+export interface AuthorizeConfidentialParams extends ConfidentialProofAccounts {
+  readonly policyAccount: Address;
+  readonly agent: TransactionSigner;
+  readonly amountCiphertext: Uint8Array;
+}
+
+export function buildAuthorizeConfidentialInstruction(params: AuthorizeConfidentialParams) {
+  return {
+    programAddress: POLICY_V2_PROGRAM_ID,
+    accounts: [
+      { address: params.policyAccount, role: WRITABLE },
+      { address: params.agent.address, role: READONLY_SIGNER, signer: params.agent },
+      ...proofAccountMetas(params),
+    ],
+    data: confidentialAmountData(IX_AUTHORIZE_CONFIDENTIAL, params.amountCiphertext),
+  };
+}
+
+export interface AuthorizeConfidentialAndInvokeParams
+  extends AuthorizeConfidentialParams {
+  readonly targetProgram: Address;
+  readonly instructionData: Uint8Array;
+  readonly forwardedAccounts: readonly ForwardedAccount[];
+}
+
+/**
+ * The confidential twin of `authorize_and_invoke`: same CPI allowlist and
+ * custody rules on the program side, budget enforced over ciphertexts.
+ */
+export function buildAuthorizeConfidentialAndInvokeInstruction(
+  params: AuthorizeConfidentialAndInvokeParams,
+) {
+  requireLength(params.amountCiphertext, 64, "amountCiphertext");
+
+  const data = new Uint8Array(8 + 64 + 4 + params.instructionData.length);
+  const view = new DataView(data.buffer);
+  data.set(IX_AUTHORIZE_CONFIDENTIAL_AND_INVOKE, 0);
+  data.set(params.amountCiphertext, 8);
+  view.setUint32(72, params.instructionData.length, true);
+  data.set(params.instructionData, 76);
+
+  return {
+    programAddress: POLICY_V2_PROGRAM_ID,
+    accounts: [
+      { address: params.policyAccount, role: WRITABLE },
+      { address: params.agent.address, role: READONLY_SIGNER, signer: params.agent },
+      { address: params.targetProgram, role: READONLY },
+      ...proofAccountMetas(params),
+      ...params.forwardedAccounts.map((account) => ({
+        address: account.address,
+        role: account.role,
+      })),
+    ],
+    data,
+  };
+}
+
+function proofAccountMetas(accounts: ConfidentialProofAccounts) {
+  return [
+    { address: accounts.transferEqualityProof, role: READONLY },
+    { address: accounts.periodEqualityProof, role: READONLY },
+    { address: accounts.rangeProof, role: READONLY },
+  ];
+}
+
+function confidentialAmountData(discriminator: Uint8Array, amountCiphertext: Uint8Array) {
+  requireLength(amountCiphertext, 64, "amountCiphertext");
+  const data = new Uint8Array(8 + 64);
+  data.set(discriminator, 0);
+  data.set(amountCiphertext, 8);
+  return data;
+}
+
+/**
+ * Fails loudly on a wrong-sized ciphertext rather than letting it silently pad
+ * to zeros — an all-zero ElGamal ciphertext is a perfectly valid encryption of
+ * zero, so a truncated one would produce a confusing on-chain rejection far
+ * from the actual mistake.
+ */
+function requireLength(bytes: Uint8Array, expected: number, name: string): void {
+  if (bytes.length !== expected) {
+    throw new Error(`${name} must be ${expected} bytes, got ${bytes.length}`);
+  }
+}
+
 export interface PolicyV2AccountState {
   readonly owner: string;
   readonly agent: string;
@@ -329,6 +469,21 @@ export interface PolicyV2AccountState {
    * accidentally treat "no custody" as a real address.
    */
   readonly custodiedTokenAccount: string | null;
+  /**
+   * When set, the visible `maxPerTransfer`/`maxPerPeriod`/`spentInPeriod`
+   * fields above are stale leftovers and the operative limits are the
+   * ciphertexts below. Callers must not present the plaintext numbers as the
+   * policy in that case — the program itself refuses to enforce them.
+   */
+  readonly confidentialLimits: ConfidentialLimitCiphertexts | null;
+}
+
+export interface ConfidentialLimitCiphertexts {
+  /** 32-byte ElGamal pubkey the three ciphertexts are encrypted under. */
+  readonly limitPubkey: Uint8Array;
+  readonly maxPerTransferCt: Uint8Array;
+  readonly maxPerPeriodCt: Uint8Array;
+  readonly spentInPeriodCt: Uint8Array;
 }
 
 /**
@@ -363,6 +518,11 @@ export function decodePolicyV2Account(data: Uint8Array): PolicyV2AccountState {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   const custodied = addressDecoder.decode(data.slice(113, 145));
 
+  const limitPubkey = data.slice(CONFIDENTIAL_FIELDS_AT, CONFIDENTIAL_FIELDS_AT + 32);
+  // All-zero is the program's "confidential limits off" sentinel, matching
+  // `Policy::has_confidential_limits`.
+  const confidentialEnabled = limitPubkey.some((byte) => byte !== 0);
+
   return {
     owner: addressDecoder.decode(data.slice(8, 40)),
     agent: addressDecoder.decode(data.slice(40, 72)),
@@ -373,5 +533,13 @@ export function decodePolicyV2Account(data: Uint8Array): PolicyV2AccountState {
     periodStart: view.getBigInt64(104, true),
     bump: data[112] as number,
     custodiedTokenAccount: custodied === NO_CUSTODY ? null : custodied,
+    confidentialLimits: confidentialEnabled
+      ? {
+          limitPubkey,
+          maxPerTransferCt: data.slice(CONFIDENTIAL_FIELDS_AT + 32, CONFIDENTIAL_FIELDS_AT + 96),
+          maxPerPeriodCt: data.slice(CONFIDENTIAL_FIELDS_AT + 96, CONFIDENTIAL_FIELDS_AT + 160),
+          spentInPeriodCt: data.slice(CONFIDENTIAL_FIELDS_AT + 160, CONFIDENTIAL_FIELDS_AT + 224),
+        }
+      : null,
   };
 }

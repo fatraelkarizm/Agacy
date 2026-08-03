@@ -9,9 +9,16 @@ edition = "2021"
 rust-version = "1.89.0"
 
 [profile.release]
+# `overflow-checks` stays on deliberately: this program does arithmetic on
+# spend totals, and a wrapping add is the difference between a limit and no
+# limit at all. Never trade it for size or speed.
 overflow-checks = true
 lto = "fat"
 codegen-units = 1
+# Size, not speed. Deployed program size is paid for in rent on every deploy,
+# and nothing here is compute-bound — the expensive work (proof verification)
+# happens in Solana's own programs, not this one.
+opt-level = "z"
 [profile.release.build-override]
 opt-level = 3
 incremental = false
