@@ -121,26 +121,22 @@ the agent's reasoning for the action.
 
 ### Delegate binding
 
-**Compiled, tested, deployed, and proven live on devnet with real token
-movement.** `programs/agacy_policy_v2` passes 11/11 Rust integration tests (litesvm) and is deployed
-at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet).
-`npm run verify-delegate-binding` (`scripts/verify-delegate-binding-devnet.ts`) goes further than
-either of those: it mints real SPL tokens on devnet, has the owner approve the policy PDA as
-delegate for an amount deliberately *larger* than the policy's own limit, then calls
-`authorize_and_invoke` to CPI a real transfer. An in-policy call moves real tokens between real
-devnet accounts; an over-limit call is rejected by the running program even though the raw SPL
-approval alone would have allowed it — a real bypass attempt against a live program on a real
-cluster, and it fails to bypass. What this does and doesn't prove, precisely: it closes the
-*structural* bypass (an agent cannot spend without this program's policy check succeeding first,
-because it holds no other authority). It does **not** close the *confidential-amount-claim* gap —
-this program still cannot verify a caller-claimed amount matches an encrypted transfer's real value,
-which is why the proof above uses classic SPL Token, not Token-2022 confidential transfer
-specifically (that needs ZK proof-context accounts this CPI doesn't forward yet). And it is **not
-yet wired into the app itself** — real onboarding still provisions through the original native
-program (`AmJYcUrs36n…`), so `agacy_policy_v2` is proven standalone, not live in the product. See
-`docs/PRIVACY_ARCHITECTURE.md` section 14 for the full design and both of these exact boundaries.
-Arcium-based confidential policy logic (hiding the limit values themselves) is a separate, unstarted
-candidate for the same layer.
+**Compiled, deployed, and proven live on devnet with real token movement — not just simulation.**
+The policy program is deployed at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet)
+and set up as a real token account's delegate, then made to actually forward a transfer on the
+policy's behalf: an in-policy call moved real tokens between real devnet accounts, and an over-limit
+call was rejected by the running program even though the raw token-level approval alone would have
+allowed it — a genuine bypass attempt against a live program on a real cluster, and it fails to
+bypass. What this does and doesn't prove, precisely: it closes the *structural* bypass (an agent
+cannot spend without the policy check succeeding first, because it holds no other authority). It
+does **not** close the *confidential-amount-claim* gap — the program still cannot verify a
+caller-claimed amount matches an encrypted transfer's real value, which is why this proof uses
+classic SPL Token rather than Token-2022 confidential transfer specifically (that needs ZK
+proof-context accounts this mechanism doesn't forward yet). And it is **not yet wired into the app
+itself** — real onboarding still provisions through the original policy program, so this
+delegate-binding mechanism is proven standalone, not yet live in the product. Arcium-based
+confidential policy logic (hiding the limit values themselves) is a separate, unstarted candidate
+for the same layer.
 
 ### Verified on devnet
 
@@ -154,17 +150,13 @@ candidate for the same layer.
 Re-run `npm run capture-proof` any time to re-verify both claims against a fresh transaction rather
 than trusting a screenshot.
 
-141 tests passing (120 TypeScript, 21 Rust — 10 native `program/`, 11 Anchor/litesvm `agacy_policy_v2`).
-
 ## Run it
 
 ```bash
 npm install
-npm run dev            # landing page + live agent demo
-npm test               # unit tests
-npm run test:integration   # devnet round trip (needs AGACY_RPC_URL)
-npm run capture-proof      # re-record the on-chain evidence
+npm run dev                    # landing page + live agent demo
+npm test                       # unit tests
+npm run test:integration       # devnet round trip (needs AGACY_RPC_URL)
+npm run capture-proof          # re-record the on-chain evidence
+npm run verify-delegate-binding # re-verify delegate binding against a fresh devnet transfer
 ```
-
-## Project docs
-Planning documents (`PRD`, `FEATURES`, `INFRASTRUCTURE`, `ARCHITECTURE`, competitive/market research) are kept local and are not published to this repo.
