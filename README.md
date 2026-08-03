@@ -32,8 +32,8 @@ combines three things, only one of which is a Solana primitive:
    invention. A public observer sees a confirmed transaction and nothing about its size.
 2. **A spend-policy program that makes limits structural, not requested.** A deployed on-chain
    program owns the policy account; the agent can only spend what the account allows, never what it
-   claims it needs — verified by having the program itself act as the token account's delegate and
-   reject an over-limit transfer even when the raw token-level approval would have permitted it.
+   claims it needs — verified by having the program itself hold the token account and sign a real
+   confidential payment under a real limit, then reject one over it.
 3. **Encrypted reasoning, not just encrypted balances.** Confidential Transfer hides *how much*
    moved; it says nothing about *why*. Agacy encrypts the agent's plain-language reasoning and
    carries the ciphertext on-chain, so the audit trail for *why* an agent paid is as protected as
@@ -49,8 +49,9 @@ combines three things, only one of which is a Solana primitive:
   ciphertext validity, range).
 - An on-chain spend-policy program enforcing per-transfer and rolling-period limits, deployed to
   devnet, that the agent cannot self-modify or talk its way past.
-- A delegate-binding mechanism proven to move real tokens on live devnet as a real SPL delegate,
-  and to reject an over-limit transfer even when the raw delegate approval was set higher.
+- A custody model proven on live devnet to move real value through a real confidential transfer the
+  program itself signs, to reject an over-limit one, and to hand the account back to its owner on
+  demand.
 - Encrypted agent reasoning, carried on-chain and verified absent from the raw transaction bytes.
 - A public/authorized view split enforced by the type system, not a UI toggle — a public view is
   structurally incapable of holding a decrypted amount.
@@ -79,7 +80,8 @@ underlying mechanism.
 - **Chain:** Solana (devnet for the hackathon build)
 - **Confidential transfer:** Token-2022 Confidential Transfer, `@solana/zk-sdk`, ZK ElGamal Proof program
 - **On-chain enforcement:** custom spend-policy program — native Rust (deployed) and an Anchor/PDA
-  rewrite enabling delegate binding (deployed, litesvm-tested)
+  rewrite that can hold custody of a token account and gate every payment out of it (deployed,
+  verified live on devnet)
 - **Encrypted reasoning:** AES-GCM (Web Crypto), carried on-chain via SPL Memo
 - **Agent layer:** Solana Agent Kit, Vercel AI SDK for the autonomous tool-calling loop
 - **App:** Next.js + TypeScript, `@solana/kit`
@@ -107,12 +109,12 @@ primitive Agacy uses, the same way any app uses SPL Token. The parts built for t
 - **A concrete, narrated adversarial model** (`buildAttackSimulation`) showing the actual mechanism
   under attack: the same scan an attacker or competitor would run reveals a target on an ordinary
   wallet and finds nothing to size on Agacy's.
-- **The policy program can be the token account's actual delegate, gating any CPI it forwards.**
-  `authorize_and_invoke` checks policy, then signs for the policy PDA via `invoke_signed` to forward
-  a transfer — proven in a simulated runtime (litesvm) by having it move real SPL tokens as a real
-  delegate, and refuse a transfer over the policy's limit even when the raw SPL delegate approval
-  was deliberately set higher. This is what makes the earlier "spend limits are unbypassable" claim
-  structural rather than aspirational — see the caveat below on what it still doesn't prove.
+- **The policy program can hold the token account outright and gate every payment leaving it.**
+  It checks the limit, then signs the transfer itself — so there is no second path to the funds for
+  an agent to take. Proven on live devnet with a real Token-2022 confidential transfer, which is
+  the case a delegate-based design cannot cover at all. This is what makes the earlier "spend limits
+  are unbypassable" claim structural rather than aspirational — see the caveat below on what it
+  still doesn't prove, and the section further down on how the owner gets the account back.
 
 ### How it works
 
@@ -148,43 +150,60 @@ declaring it fails an explicit check before it can ship at all — the same "not
 model" principle as the rest of Agacy, now extended to an open-ended toolset instead of one hardcoded
 action.
 
-### Delegate binding
+### A limit the agent cannot route around
 
-**Compiled, deployed, and proven live on devnet with real token movement — not just simulation.**
-The policy program is deployed at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet)
-and set up as a real token account's delegate, then made to actually forward a transfer on the
-policy's behalf: an in-policy call moved real tokens between real devnet accounts, and an over-limit
-call was rejected by the running program even though the raw token-level approval alone would have
-allowed it — a genuine bypass attempt against a live program on a real cluster, and it fails to
-bypass. What this does and doesn't prove, precisely: it closes the *structural* bypass (an agent
-cannot spend without the policy check succeeding first, because it holds no other authority). It
-does **not** close the *confidential-amount-claim* gap — the program still cannot verify a
-caller-claimed amount matches an encrypted transfer's real value, which is why this proof uses
-classic SPL Token rather than Token-2022 confidential transfer specifically (that needs ZK
-proof-context accounts this mechanism doesn't forward yet). And it is **not yet wired into the app
-itself** — real onboarding still provisions through the original policy program, so this
-delegate-binding mechanism is proven standalone, not yet live in the product. Arcium-based
-confidential policy logic (hiding the limit values themselves) is a separate, unstarted candidate
-for the same layer.
+A spend limit only means something if the agent has no way to spend without it. Getting there took
+two attempts, and the first one failed for a reason worth stating plainly.
+
+The obvious approach is to make the policy program the token account's *delegate*. That works, and
+it is proven live: an in-policy call moved real tokens between real devnet accounts, while an
+over-limit call was rejected by the running program even though the raw token-level approval alone
+would have allowed it. But it does not work for confidential transfers. Token-2022 ignores delegate
+authority entirely for those — tested on devnet with an unlimited approval, rejected all the same.
+For the one thing Agacy exists to do, delegation is not a weaker mechanism; it is not a mechanism.
+
+So the program takes ownership of the account instead. **A real Token-2022 confidential transfer
+now moves real value on devnet with the policy program as its authority, under a real spend limit** —
+the operation delegation could not perform at all.
+
+That is a serious amount of power to hand a program, and the honest part is what comes with it:
+
+- **You can always take it back.** Releasing custody is owner-only, ignores the spend budget and the
+  clock entirely, and is tested with the period limit deliberately exhausted. It ships in the same
+  release as custody itself, not later — without it, a bug in this program could strand real funds
+  with no human override.
+- **The program's signature is narrow by construction.** It will only ever sign a transfer, on a
+  token program, moving funds out of the one account it actually holds. Building custody surfaced a
+  real vulnerability here: an agent could otherwise have spent one unit of its allowance on a
+  change-of-ownership instruction and taken the account outright, permanently. Everything the
+  program can sign is now on an explicit allowlist.
+
+What this still does **not** close: the program cannot decrypt a transfer to confirm the amount it
+was told about is the amount that actually moves. It bounds what kind of action can happen, not the
+value inside an encrypted one. Hiding the limit values themselves — so the policy is private too,
+not just the payments — is a separate, unstarted candidate for the same layer.
 
 ### Verified on devnet
 
 | | |
 |---|---|
 | Confidential transfer | [`5vTuKeoULGc…`](https://explorer.solana.com/tx/5vTuKeoULGc26FdNoxCVErWbYzet1jReDhgRqvp2Le9erDsWTx8p4P4VCGotC9mwFHaifazLeAbzq2mpCLwqAEtz?cluster=devnet) |
-| Spend policy program | [`AmJYcUrs36n…`](https://explorer.solana.com/address/AmJYcUrs36nwpiEZxJDB5q49LbXypBVujNVMvKMWg19e?cluster=devnet) |
+| Spend policy program | [`9sYKkYh1GTK…`](https://explorer.solana.com/address/9sYKkYh1GTKY2whkGPGXuG1VKiYqfiwyjVcpQbYtHtwW?cluster=devnet) |
 | Transferred amount readable on-chain | **No** — verified by reading the recipient account bytes |
 | Agent's reasoning readable on-chain | **No** — encrypted, carried in a memo, verified by reading the raw transaction bytes back from devnet |
+| Confidential transfer signed by the policy program | **Yes** — under a real spend limit, with an over-limit attempt and an attempt to seize the account both rejected by the running program |
 
-Re-run `npm run capture-proof` any time to re-verify both claims against a fresh transaction rather
-than trusting a screenshot.
+Re-run `npm run capture-proof` to re-verify the privacy claims against a fresh transaction, or
+`npm run verify-custody` to re-run the whole custody sequence — handover, a real policy-gated
+confidential payment, both refusals, and the owner taking the account back — rather than trusting a
+screenshot.
 
 ## Run it
 
 ### Prerequisites
 - Node.js 22 or newer, and npm
 - `npm run dev` and `npm test` need nothing further. Any script that actually touches devnet
-  (`capture-proof`, `verify-delegate-binding`, `agent`, …) needs a **funded** devnet keypair — the
+  (`capture-proof`, `verify-custody`, `agent`, …) needs a **funded** devnet keypair — the
   easiest way is the [Solana CLI](https://solana.com/docs/intro/installation): run
   `solana-keygen new` once, then `solana airdrop 2 --url devnet`, and these scripts pick that
   keypair up automatically. No wallet extension or manual funding step beyond that one airdrop.
@@ -227,6 +246,7 @@ npm run dev                     # landing page + live agent demo
 npm test                        # unit tests
 npm run test:integration        # devnet round trip (needs AGACY_RPC_URL)
 npm run capture-proof           # re-record the on-chain evidence
+npm run verify-custody          # re-run the whole custody sequence against fresh devnet accounts
 npm run verify-delegate-binding # re-verify delegate binding against a fresh devnet transfer
 npm run agent                   # run the autonomous agent against real devnet (needs LLM_API_KEY)
 npm run agent:mainnet           # same agent, mainnet swap capability enabled (needs the 4 vars above)

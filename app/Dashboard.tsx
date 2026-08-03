@@ -232,6 +232,7 @@ function DashboardSectionContent(props: DashboardSectionContentProps) {
 function Overview({
   agent,
   policy,
+  onChainPolicy,
   publicTransactions,
   balance,
   operationalStatus,
@@ -257,7 +258,11 @@ function Overview({
           onOpen={() => onNavigate("run")}
           onViewAll={() => onNavigate("agents")}
         />
-        <PolicyShell policy={policy} onOpen={() => onNavigate("policies")} />
+        <PolicyShell
+          policy={policy}
+          onChainPolicy={onChainPolicy}
+          onOpen={() => onNavigate("policies")}
+        />
       </div>
 
       <PublicTransactionRegistry
@@ -341,14 +346,32 @@ function AgentRegistry({
   );
 }
 
-function PolicyShell({ policy, onOpen }: { policy: SpendPolicyDTO | null; onOpen: () => void }) {
+function PolicyShell({
+  policy,
+  onChainPolicy,
+  onOpen,
+}: {
+  policy: SpendPolicyDTO | null;
+  onChainPolicy: OnChainPolicyStatusDTO | null;
+  onOpen: () => void;
+}) {
+  // Three genuinely different states, kept distinct rather than collapsed into
+  // a single "configured" badge: a local draft, a real account the program can
+  // sign for, and an account the program actually holds. Only the last one
+  // makes the limit unbypassable.
+  const state = onChainPolicy?.custodiedTokenAccount
+    ? "Custody held on-chain"
+    : onChainPolicy
+      ? "Provisioned — custody not handed over"
+      : "Local draft only";
+
   return (
     <section className="dashboard-panel dashboard-policy-shell">
       <PanelHeader icon={ShieldCheck} title="Spend Policy Shell" />
       <div className="dashboard-policy-body">
         <p className="dashboard-label">Policy status</p>
         <strong>{policy ? "Demo policy" : "Not configured"}</strong>
-        <span className="dashboard-policy-state">Delegate binding pending</span>
+        <span className="dashboard-policy-state">{state}</span>
         <div className="dashboard-policy-divider" />
         <p className="dashboard-label">Authority</p>
         <div className="dashboard-authority-row"><Key aria-hidden="true" size={18} weight="duotone" /><span>Owner controls limits</span></div>
@@ -468,7 +491,19 @@ function PolicyWorkspace({
 }) {
   return (
     <div className="dashboard-workspace">
-      <div className="dashboard-workspace-intro"><div><h2>Limits live outside the prompt.</h2><p>The per-transfer run below still checks policy locally. Delegate binding — making that check unbypassable on-chain — remains the next integration step (tracked in FEATURES.md).</p></div></div>
+      <div className="dashboard-workspace-intro">
+        <div>
+          <h2>Limits live outside the prompt.</h2>
+          <p>
+            Your policy is a program-derived account, so the program itself can sign for it —
+            that is what makes a limit enforceable rather than merely recorded. Handing the
+            program custody of a token account closes the last gap, since Token-2022
+            confidential transfers refuse delegates outright. The run below still checks locally:
+            it uses a throwaway agent key, and persisting a real one is a key-custody decision
+            this build deliberately leaves open.
+          </p>
+        </div>
+      </div>
       {policy ? (
         <section className="dashboard-policy-grid">
           <PolicyFact label="Per transfer" value={`${formatTokens(policy.maxPerTransfer)} USDC`} icon={Receipt} />
@@ -485,12 +520,15 @@ function PolicyWorkspace({
       )}
 
       {onChainPolicy && (
-        <section className="dashboard-policy-grid">
-          <PolicyFact label="On-chain per transfer" value={`${formatTokens(onChainPolicy.maxPerTransfer)} USDC`} icon={Receipt} />
-          <PolicyFact label="On-chain per period" value={`${formatTokens(onChainPolicy.maxPerPeriod)} USDC`} icon={Database} />
-          <PolicyFact label="Spent this period" value={`${formatTokens(onChainPolicy.spentInPeriod)} USDC`} icon={Receipt} />
-          <PolicyFact label="Policy account" value={`${onChainPolicy.policyAccount.slice(0, 8)}…`} icon={Key} />
-        </section>
+        <>
+          <section className="dashboard-policy-grid">
+            <PolicyFact label="On-chain per transfer" value={`${formatTokens(onChainPolicy.maxPerTransfer)} USDC`} icon={Receipt} />
+            <PolicyFact label="On-chain per period" value={`${formatTokens(onChainPolicy.maxPerPeriod)} USDC`} icon={Database} />
+            <PolicyFact label="Spent this period" value={`${formatTokens(onChainPolicy.spentInPeriod)} USDC`} icon={Receipt} />
+            <PolicyFact label="Policy account" value={`${onChainPolicy.policyAccount.slice(0, 8)}…`} icon={Key} />
+          </section>
+          <CustodyPanel custodiedTokenAccount={onChainPolicy.custodiedTokenAccount} />
+        </>
       )}
     </div>
   );
@@ -498,6 +536,48 @@ function PolicyWorkspace({
 
 function PolicyFact({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Receipt }) {
   return <article><Icon aria-hidden="true" size={23} weight="duotone" /><span>{label}</span><strong>{value}</strong></article>;
+}
+
+/**
+ * Custody is the sharpest trade-off in the product, so the panel states both
+ * halves rather than presenting it as a feature to switch on. Deliberately
+ * has no button: the dashboard's demo run holds no real confidential token
+ * account to hand over, and a control that looked live but wasn't would be
+ * worse than none.
+ */
+function CustodyPanel({ custodiedTokenAccount }: { custodiedTokenAccount: string | null }) {
+  const held = custodiedTokenAccount !== null;
+  return (
+    <section className="dashboard-panel">
+      <PanelHeader icon={held ? LockKey : Key} title="Token account custody" />
+      <div className="dashboard-policy-body">
+        <p className="dashboard-label">Who holds the account</p>
+        <strong>{held ? "The policy program" : "You do"}</strong>
+        <span className="dashboard-policy-state">
+          {held
+            ? `${custodiedTokenAccount.slice(0, 8)}… answers to the policy PDA`
+            : "Delegate mode — the program cannot gate a confidential transfer yet"}
+        </span>
+        <div className="dashboard-policy-divider" />
+        <div className="dashboard-authority-row">
+          <ShieldCheck aria-hidden="true" size={18} weight="duotone" />
+          <span>
+            {held
+              ? "Every payment must pass the on-chain limit first"
+              : "Token-2022 refuses delegates, so limits stay advisory until you hand it over"}
+          </span>
+        </div>
+        <div className="dashboard-authority-row">
+          <ShieldWarning aria-hidden="true" size={18} weight="duotone" />
+          <span>
+            {held
+              ? "You can take it back at any time — release is owner-only and ignores the spend budget"
+              : "Handing it over means the program's signature becomes the only way to move funds"}
+          </span>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function SecurityWorkspace({ onProof }: { onProof: () => void }) {

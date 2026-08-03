@@ -2,12 +2,20 @@
 
 import devnetProof from "../../server/data/devnet-proof.json";
 import autonomousProof from "../../server/data/autonomous-agent-proof.json";
-import { POLICY_PROGRAM_ID } from "../../server/data/policy-program";
+import custodyProof from "../../server/data/custody-proof.json";
+import { POLICY_V2_PROGRAM_ID } from "../../server/data/policy-program-v2";
 
 interface AutonomousStep {
   readonly tool: string;
   readonly outcome: "allowed" | "refused";
   readonly reason?: string;
+}
+
+interface CustodyCheck {
+  readonly step: string;
+  readonly expected: string;
+  readonly observed: string;
+  readonly ok: boolean;
 }
 
 /**
@@ -31,7 +39,7 @@ export default function ProofPage() {
         <ProofItem label="Transfer transaction" value={devnetProof.transferSignature} isTx />
         <ProofItem label="Confidential mint" value={devnetProof.mint} />
         <ProofItem label="Recipient account" value={devnetProof.recipientAccount} />
-        <ProofItem label="Spend policy program" value={POLICY_PROGRAM_ID} />
+        <ProofItem label="Spend policy program" value={POLICY_V2_PROGRAM_ID} />
         <div className="proof-item">
           <div className="proof-label">Amount readable on-chain</div>
           <div className="proof-verdict">
@@ -148,7 +156,60 @@ export default function ProofPage() {
               "from decrypting the vendor's real balance, not from asking the model what happened.)"}
         </div>
       </div>
+
+      <div className="step-head" style={{ marginTop: "2.5rem" }}>
+        <h3>And the limit is no longer something the agent could route around.</h3>
+        <p className="section-sub">
+          Everything above still relies on the agent choosing to ask. Token-2022 confidential
+          transfers refuse delegate authority outright — tested on devnet with an unlimited
+          approval, rejected all the same — so the only way to make the limit structural was to
+          give the policy program the token account itself. Which raises the obvious question:
+          what stops the program, or the agent, from simply keeping it?
+        </p>
+      </div>
+
+      <div className="proof-grid">
+        <ProofItem label="Custody handover" value={custodyProof.signatures.assumeCustody} isTx />
+        <ProofItem
+          label="Confidential transfer, signed by the program"
+          value={custodyProof.signatures.confidentialTransfer}
+          isTx
+        />
+        <ProofItem label="Owner takes it back" value={custodyProof.signatures.releaseCustody} isTx />
+        <ProofItem label="Custodied account" value={custodyProof.custodiedTokenAccount} />
+      </div>
+
+      <CustodyChecklist checks={custodyProof.checks as CustodyCheck[]} />
     </div>
+  );
+}
+
+/**
+ * Renders the live-devnet checks verbatim, expected value beside observed —
+ * the point being that each row is a comparison anyone can redo, not a claim
+ * to be taken on trust.
+ */
+function CustodyChecklist({ checks }: { checks: readonly CustodyCheck[] }) {
+  const passed = checks.filter((check) => check.ok).length;
+  return (
+    <section className="card console" style={{ position: "static", marginTop: "14px" }}>
+      <div className="console-head">
+        <span className="dot" />
+        Live devnet checks ({passed}/{checks.length} passed)
+      </div>
+      <div className="console-body" style={{ maxHeight: "480px" }}>
+        {checks.map((check, i) => (
+          <div className={`step step-${check.ok ? "execute" : "refused"}`} key={i}>
+            <span className="step-kind">{check.ok ? "holds" : "failed"}</span>
+            <span className="step-text">
+              {check.step}
+              <br />
+              <span style={{ opacity: 0.62 }}>observed: {check.observed}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
