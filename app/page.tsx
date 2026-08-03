@@ -387,7 +387,10 @@ function Intro({ onStart, onProof }: { onStart: () => void; onProof: () => void 
           </article>
           <article className="bento-detail bento-policy">
             <strong>Policy gate</strong>
-            <span>Spend limits live outside the agent prompt.</span>
+            <span>
+              Spend limits live outside the agent prompt — encrypted, and enforced by a program that
+              never reads them.
+            </span>
           </article>
         </div>
       </section>

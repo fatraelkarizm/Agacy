@@ -113,5 +113,6 @@ export async function fetchOnChainPolicyStatus(
     spentInPeriod: state.spentInPeriod,
     periodStart: state.periodStart,
     custodiedTokenAccount: state.custodiedTokenAccount,
+    limitsAreConfidential: state.confidentialLimits !== null,
   };
 }

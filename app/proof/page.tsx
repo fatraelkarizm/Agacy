@@ -3,6 +3,7 @@
 import devnetProof from "../../server/data/devnet-proof.json";
 import autonomousProof from "../../server/data/autonomous-agent-proof.json";
 import custodyProof from "../../server/data/custody-proof.json";
+import confidentialLimitsProof from "../../server/data/confidential-limits-proof.json";
 import { POLICY_V2_PROGRAM_ID } from "../../server/data/policy-program-v2";
 
 interface AutonomousStep {
@@ -180,6 +181,39 @@ export default function ProofPage() {
       </div>
 
       <CustodyChecklist checks={custodyProof.checks as CustodyCheck[]} />
+
+      <div className="step-head" style={{ marginTop: "2.5rem" }}>
+        <h3>Even the limit itself is no longer a public number.</h3>
+        <p className="section-sub">
+          The payments were private; the budget was not. A visible &quot;20 per transfer, 50 per
+          week&quot; sizes a target before an attacker tries anything. So the limits are encrypted
+          too — and the program enforces them without ever reading them. It subtracts the encrypted
+          amount from the encrypted limit and requires a proof the result is not negative. A spend
+          that is over budget has no such proof to give.
+        </p>
+      </div>
+
+      <div className="proof-grid">
+        <ProofItem label="Policy account" value={confidentialLimitsProof.policyAccount} />
+        <ProofItem label="Authorization transaction" value={confidentialLimitsProof.authorizeSignature} isTx />
+        <div className="proof-item">
+          <div className="proof-label">Limit values stored on-chain</div>
+          <div className="proof-verdict">encrypted, never in the clear</div>
+        </div>
+      </div>
+
+      <CustodyChecklist checks={confidentialLimitsProof.checks as CustodyCheck[]} />
+
+      <div className="proof-item" style={{ marginTop: "14px" }}>
+        <div className="proof-label">What this does not claim</div>
+        <div className="proof-verdict" style={{ fontSize: "0.85rem", fontWeight: 400 }}>
+          The limit is hidden from the public, not from the agent — producing the proof requires the
+          key, so whoever proves can also read the budget. That is deliberate: an agent needs to know
+          what it may spend, a block explorer does not. And none of this makes Agacy untraceable.
+          Addresses, the mint, and the timing of every payment remain visible on-chain. What is
+          hidden is the amount, the reasoning, and now the budget.
+        </div>
+      </div>
     </div>
   );
 }

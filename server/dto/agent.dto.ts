@@ -87,4 +87,13 @@ export interface OnChainPolicyStatusDTO {
    * surfaced rather than left implicit.
    */
   readonly custodiedTokenAccount: string | null;
+  /**
+   * True once the limits on-chain are ciphertexts rather than numbers.
+   *
+   * When this is set, `maxPerTransfer`/`maxPerPeriod`/`spentInPeriod` above are
+   * stale leftovers — the program itself refuses to enforce them — so a view
+   * must not present them as the policy. That is a correctness requirement, not
+   * a presentation preference.
+   */
+  readonly limitsAreConfidential: boolean;
 }

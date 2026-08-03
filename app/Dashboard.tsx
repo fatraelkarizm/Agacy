@@ -522,11 +522,30 @@ function PolicyWorkspace({
       {onChainPolicy && (
         <>
           <section className="dashboard-policy-grid">
-            <PolicyFact label="On-chain per transfer" value={`${formatTokens(onChainPolicy.maxPerTransfer)} USDC`} icon={Receipt} />
-            <PolicyFact label="On-chain per period" value={`${formatTokens(onChainPolicy.maxPerPeriod)} USDC`} icon={Database} />
-            <PolicyFact label="Spent this period" value={`${formatTokens(onChainPolicy.spentInPeriod)} USDC`} icon={Receipt} />
+            {/*
+              Deliberately not falling back to the plaintext numbers when the
+              limits are encrypted. The program refuses to enforce those fields
+              in that state, so showing them would present a number that is not
+              the policy — the exact confusion this feature exists to remove.
+            */}
+            <PolicyFact
+              label="On-chain per transfer"
+              value={onChainPolicy.limitsAreConfidential ? "Encrypted" : `${formatTokens(onChainPolicy.maxPerTransfer)} USDC`}
+              icon={onChainPolicy.limitsAreConfidential ? LockKey : Receipt}
+            />
+            <PolicyFact
+              label="On-chain per period"
+              value={onChainPolicy.limitsAreConfidential ? "Encrypted" : `${formatTokens(onChainPolicy.maxPerPeriod)} USDC`}
+              icon={onChainPolicy.limitsAreConfidential ? LockKey : Database}
+            />
+            <PolicyFact
+              label="Spent this period"
+              value={onChainPolicy.limitsAreConfidential ? "Encrypted" : `${formatTokens(onChainPolicy.spentInPeriod)} USDC`}
+              icon={onChainPolicy.limitsAreConfidential ? LockKey : Receipt}
+            />
             <PolicyFact label="Policy account" value={`${onChainPolicy.policyAccount.slice(0, 8)}…`} icon={Key} />
           </section>
+          {onChainPolicy.limitsAreConfidential && <ConfidentialLimitNote />}
           <CustodyPanel custodiedTokenAccount={onChainPolicy.custodiedTokenAccount} />
         </>
       )}
@@ -536,6 +555,36 @@ function PolicyWorkspace({
 
 function PolicyFact({ label, value, icon: Icon }: { label: string; value: string; icon: typeof Receipt }) {
   return <article><Icon aria-hidden="true" size={23} weight="duotone" /><span>{label}</span><strong>{value}</strong></article>;
+}
+
+/**
+ * Explains why the numbers above went blank, and — just as importantly — who
+ * can still read them. "Encrypted" with no further detail invites the reader
+ * to assume more privacy than is actually on offer.
+ */
+function ConfidentialLimitNote() {
+  return (
+    <section className="dashboard-panel">
+      <PanelHeader icon={LockKey} title="Why those values are blank" />
+      <div className="dashboard-policy-body">
+        <p className="dashboard-label">Your budget is not public anymore</p>
+        <strong>The program enforces a limit it cannot read</strong>
+        <span className="dashboard-policy-state">
+          Limits are stored encrypted. Each payment is checked by subtracting ciphertexts and
+          requiring a proof the result is not negative — no comparison of visible numbers happens.
+        </span>
+        <div className="dashboard-policy-divider" />
+        <div className="dashboard-authority-row">
+          <Eye aria-hidden="true" size={18} weight="duotone" />
+          <span>You and your agent can still read the budget — both hold the key</span>
+        </div>
+        <div className="dashboard-authority-row">
+          <EyeSlash aria-hidden="true" size={18} weight="duotone" />
+          <span>Anyone reading the chain sees ciphertext, so your spending capacity is not a public number</span>
+        </div>
+      </div>
+    </section>
+  );
 }
 
 /**
@@ -586,6 +635,8 @@ function SecurityWorkspace({ onProof }: { onProof: () => void }) {
       <div className="dashboard-workspace-intro"><div><h2>Private amounts. Honest boundaries.</h2><p>Agacy separates what is verified today from the shielded architecture still being built.</p></div><button className="primary" onClick={onProof}><ArrowSquareOut aria-hidden="true" size={17} />View devnet proof</button></div>
       <section className="dashboard-security-grid">
         <article><LockKey aria-hidden="true" size={27} weight="duotone" /><strong>Amounts and balances</strong><p>Token-2022 confidential transfers encrypt value on Solana devnet.</p><StatusBadge value="verified" /></article>
+        <article><SlidersHorizontal aria-hidden="true" size={27} weight="duotone" /><strong>Spend limits</strong><p>Stored as ciphertext and enforced by a program that never reads them. Your budget is not a public number.</p><StatusBadge value="verified" /></article>
+        <article><Receipt aria-hidden="true" size={27} weight="duotone" /><strong>Transaction timing and count</strong><p>Every payment is still a visible on-chain event. How often an agent pays is observable, even though the sums are not.</p><StatusBadge value="public" /></article>
         <article><Fingerprint aria-hidden="true" size={27} weight="duotone" /><strong>Account addresses</strong><p>Sender and recipient addresses remain visible in the current implementation.</p><StatusBadge value="public" /></article>
         <article><Key aria-hidden="true" size={27} weight="duotone" /><strong>Authority split</strong><p>The owner wallet remains root authority. Agent spending permission is separate.</p><StatusBadge value="designed" /></article>
         <article><ShieldWarning aria-hidden="true" size={27} weight="duotone" /><strong>Shielded execution</strong><p>Address unlinkability and a private fee path are planned, not claimed as shipped.</p><StatusBadge value="planned" /></article>
