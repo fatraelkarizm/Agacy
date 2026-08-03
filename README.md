@@ -63,24 +63,26 @@ the agent's reasoning for the action.
 - **Agent layer:** Solana Agent Kit
 - **App:** Next.js + TypeScript
 
-**Delegate binding — compiled, tested, and deployed live to devnet.** `programs/agacy_policy_v2`
-passes 11/11 Rust integration tests (litesvm) proving the CPI delegate mechanism above, and is
-deployed at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet).
-Beyond `solana program show` confirming it's executable, `npm run verify-delegate-binding`
-(`scripts/verify-delegate-binding-devnet.ts`) calls the deployed program's real `initialize` and
-`authorize` instructions on live devnet and confirms the on-chain account matches requested limits
-exactly, an in-policy spend increments tracked spend by the exact amount, and an over-limit spend
-is rejected by the running program itself. What this does and doesn't prove, precisely: it closes
-the *structural* bypass (an agent cannot spend without this program's policy check succeeding
-first, because it holds no other authority). It does **not** close the *confidential-amount-claim*
-gap — this program still cannot verify a caller-claimed amount matches an encrypted transfer's real
-value, which is why the CPI-forwarding instruction (`authorize_and_invoke`) is tested against
-classic SPL Token via litesvm, not Token-2022 confidential transfer specifically (that needs ZK
-proof-context accounts a simulated runtime doesn't provide out of the box, and a live-devnet CPI
-transfer is a larger step than the `initialize`/`authorize` check above). See
-`docs/PRIVACY_ARCHITECTURE.md` section 14 for the full design and this exact boundary. Arcium-based
-confidential policy logic (hiding the limit values themselves) is a separate, unstarted candidate
-for the same layer.
+**Delegate binding — compiled, tested, deployed, and proven live on devnet with real token
+movement.** `programs/agacy_policy_v2` passes 11/11 Rust integration tests (litesvm) and is deployed
+at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet).
+`npm run verify-delegate-binding` (`scripts/verify-delegate-binding-devnet.ts`) goes further than
+either of those: it mints real SPL tokens on devnet, has the owner approve the policy PDA as
+delegate for an amount deliberately *larger* than the policy's own limit, then calls
+`authorize_and_invoke` to CPI a real transfer. An in-policy call moves real tokens between real
+devnet accounts; an over-limit call is rejected by the running program even though the raw SPL
+approval alone would have allowed it — a real bypass attempt against a live program on a real
+cluster, and it fails to bypass. What this does and doesn't prove, precisely: it closes the
+*structural* bypass (an agent cannot spend without this program's policy check succeeding first,
+because it holds no other authority). It does **not** close the *confidential-amount-claim* gap —
+this program still cannot verify a caller-claimed amount matches an encrypted transfer's real value,
+which is why the proof above uses classic SPL Token, not Token-2022 confidential transfer
+specifically (that needs ZK proof-context accounts this CPI doesn't forward yet). And it is **not
+yet wired into the app itself** — real onboarding still provisions through the original native
+program (`AmJYcUrs36n…`), so `agacy_policy_v2` is proven standalone, not live in the product. See
+`docs/PRIVACY_ARCHITECTURE.md` section 14 for the full design and both of these exact boundaries.
+Arcium-based confidential policy logic (hiding the limit values themselves) is a separate, unstarted
+candidate for the same layer.
 
 ## Verified on devnet
 
