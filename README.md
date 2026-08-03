@@ -41,6 +41,10 @@ combines three things, only one of which is a Solana primitive:
 
 ### Key features
 
+- A genuinely autonomous agent: given a goal, not a script, it chooses its own tools and sequence
+  and decides when it's done — proven live against real devnet transactions, including a run where
+  it tried to satisfy a request beyond its budget by firing many rapid payment attempts, and the
+  spend limit held exactly at its ceiling regardless of how it tried.
 - Confidential transfers verified end-to-end on devnet (all three required ZK proofs: equality,
   ciphertext validity, range).
 - An on-chain spend-policy program enforcing per-transfer and rolling-period limits, deployed to
@@ -77,7 +81,7 @@ underlying mechanism.
 - **On-chain enforcement:** custom spend-policy program — native Rust (deployed) and an Anchor/PDA
   rewrite enabling delegate binding (deployed, litesvm-tested)
 - **Encrypted reasoning:** AES-GCM (Web Crypto), carried on-chain via SPL Memo
-- **Agent layer:** Solana Agent Kit
+- **Agent layer:** Solana Agent Kit, Vercel AI SDK for the autonomous tool-calling loop
 - **App:** Next.js + TypeScript, `@solana/kit`
 
 ## Technical deep dive
@@ -119,6 +123,31 @@ executes through Token-2022 Confidential Transfer, so a public observer sees a c
 with no readable amount or balance. Whoever the owner authorizes can decrypt full detail, including
 the agent's reasoning for the action.
 
+### The autonomous agent
+
+Earlier versions of this demo ran a fixed list of tasks through a scripted decision — reproducible,
+but closer to a bot following a script than an agent. The current agent is given a goal, not a
+task list: it chooses which tools to call, in what order, and when it's satisfied, using a real
+LLM through Solana Agent Kit's own tool-calling adapter.
+
+The interesting part isn't that it can call tools — it's what happens when it's pushed past its
+budget. Given a goal that exceeds its remaining spend for the period, the model didn't just fail
+politely: it fired many rapid, sometimes concurrent payment attempts trying to satisfy the request
+however it could. That's exactly the scenario a policy check needs to survive, and building it
+surfaced a real concurrency bug in the guard — two payment attempts landing at nearly the same
+moment could each pass the check before either was recorded as spent, which would have let them
+collectively exceed the limit as a group even though each looked compliant on its own. Fixed, and
+now covered by a regression test, the run holds exactly at the period ceiling regardless of how many
+attempts the model throws at it, independently verified by decrypting the recipient's own on-chain
+balance afterward — not by trusting the model's summary, which in testing confidently reported the
+wrong total.
+
+Every tool the model can reach that moves value is policy-gated the same way, by construction: a
+tool is checked automatically once it declares what it spends, and a tool that moves money without
+declaring it fails an explicit check before it can ship at all — the same "not a request to the
+model" principle as the rest of Agacy, now extended to an open-ended toolset instead of one hardcoded
+action.
+
 ### Delegate binding
 
 **Compiled, deployed, and proven live on devnet with real token movement — not just simulation.**
@@ -159,4 +188,5 @@ npm test                       # unit tests
 npm run test:integration       # devnet round trip (needs AGACY_RPC_URL)
 npm run capture-proof          # re-record the on-chain evidence
 npm run verify-delegate-binding # re-verify delegate binding against a fresh devnet transfer
+npm run agent                  # run the autonomous agent against real devnet (needs LLM_API_KEY)
 ```
