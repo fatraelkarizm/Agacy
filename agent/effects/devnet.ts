@@ -74,10 +74,25 @@ export function buildDevnetEffects(deps: DevnetEffectsDeps): AgentEffects {
     },
 
     async requestDevnetAirdrop({ lamports }) {
-      const signature = await deps.client.rpc
-        .requestAirdrop(deps.payer.address, lamports as never, { commitment: "confirmed" })
-        .send();
-      return { signature: signature as string };
+      // The public devnet faucet genuinely rate-limits (confirmed live: a
+      // 403 on the very next request after this project's own earlier
+      // faucet use today) — the same reason solana-client.ts's
+      // fundFromFaucet retries rather than failing on the first attempt.
+      // Retried here directly, rather than delegating to that helper,
+      // because it discards the signature this tool needs to report back.
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        try {
+          const signature = await deps.client.rpc
+            .requestAirdrop(deps.payer.address, lamports as never, { commitment: "confirmed" })
+            .send();
+          return { signature: signature as string };
+        } catch (error) {
+          lastError = error;
+          if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 2_000 * attempt));
+        }
+      }
+      throw lastError;
     },
 
     fetchTokenPrice: ({ mint }) => fetchTokenPrice(mint),
