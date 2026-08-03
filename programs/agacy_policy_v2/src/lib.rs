@@ -28,6 +28,7 @@
 //! not close — in particular §14.3, the confidential-amount-claim gap, which
 //! none of the above addresses.
 
+pub mod confidential_limits;
 pub mod constants;
 pub mod custody_guard;
 pub mod error;
@@ -114,6 +115,45 @@ pub mod agacy_policy_v2 {
     /// in this program and permanently stranded funds.
     pub fn release_custody(ctx: Context<ReleaseCustody>, new_authority: Pubkey) -> Result<()> {
         crate::instructions::custody::handle_release_custody(ctx, new_authority)
+    }
+
+    /// Replace this policy's visible limits with ElGamal ciphertexts, so the
+    /// budget stops being public. Owner-only. See confidential_limits.rs.
+    pub fn set_confidential_limits(
+        ctx: Context<SetConfidentialLimits>,
+        limit_pubkey: [u8; 32],
+        max_per_transfer_ct: [u8; 64],
+        max_per_period_ct: [u8; 64],
+    ) -> Result<()> {
+        crate::instructions::confidential::handle_set_confidential_limits(
+            ctx,
+            limit_pubkey,
+            max_per_transfer_ct,
+            max_per_period_ct,
+        )
+    }
+
+    /// Check a spend against encrypted limits, without ever learning either the
+    /// limits or the amount.
+    pub fn authorize_confidential(
+        ctx: Context<AuthorizeConfidential>,
+        amount_ct: [u8; 64],
+    ) -> Result<()> {
+        crate::instructions::confidential::handle_authorize_confidential(ctx, amount_ct)
+    }
+
+    /// The confidential twin of `authorize_and_invoke` — same CPI allowlist and
+    /// custody rules, budget enforced over ciphertexts.
+    pub fn authorize_confidential_and_invoke(
+        ctx: Context<AuthorizeConfidentialAndInvoke>,
+        amount_ct: [u8; 64],
+        instruction_data: Vec<u8>,
+    ) -> Result<()> {
+        crate::instructions::confidential::handle_authorize_confidential_and_invoke(
+            ctx,
+            amount_ct,
+            instruction_data,
+        )
     }
 
     /// Non-spending upkeep on a custodied account (`ApplyPendingBalance`).

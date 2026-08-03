@@ -31,6 +31,15 @@ pub fn handle_authorize(ctx: Context<Authorize>, amount: u64) -> Result<()> {
 /// Shared by `authorize` and `authorize_and_invoke` (authorize_and_invoke.rs)
 /// so the two enforcement paths can never silently drift apart.
 pub fn apply_policy_check(policy: &mut Policy, amount: u64) -> Result<()> {
+    // Once the owner has moved to encrypted limits, the plaintext `max_per_*`
+    // fields are no longer the policy — they are a stale copy of one. Enforcing
+    // them anyway would look like enforcement while checking a number the owner
+    // has stopped maintaining, so this path closes instead. See
+    // instructions/confidential.rs for the replacement.
+    require!(
+        !policy.has_confidential_limits(),
+        PolicyError::ConfidentialLimitsRequired
+    );
     require!(amount > 0, PolicyError::ZeroAmount);
     require!(
         amount <= policy.max_per_transfer,

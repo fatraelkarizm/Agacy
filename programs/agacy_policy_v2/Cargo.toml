@@ -21,6 +21,10 @@ custom-panic = []
 
 [dependencies]
 anchor-lang = "1.1.2"
+# Ristretto add/subtract. On-chain these are syscalls; off-chain (and in
+# litesvm tests) the same crate falls back to curve25519-dalek, so the
+# homomorphic arithmetic is identical in both places.
+solana-curve25519 = "3.1.14"
 
 [dev-dependencies]
 litesvm = "0.10.0"

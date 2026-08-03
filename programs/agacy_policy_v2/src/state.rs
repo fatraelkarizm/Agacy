@@ -31,11 +31,37 @@ pub struct Policy {
     pub bump: u8,
     /// `Pubkey::default()` means "no custody held" — see the type docs above.
     pub custodied_token_account: Pubkey,
+
+    /// ElGamal pubkey the confidential limits below are encrypted under.
+    /// All-zero means confidential limits are off and the plaintext
+    /// `max_per_*` fields are the operative ones.
+    ///
+    /// Zero is a safe sentinel rather than a real key being excluded by
+    /// accident: an all-zero ElGamal pubkey is the Ristretto identity, so every
+    /// decrypt handle under it would also be the identity — a degenerate key
+    /// nobody should be using regardless.
+    pub limit_pubkey: [u8; 32],
+    /// `Enc(max_per_transfer)` under `limit_pubkey`.
+    pub max_per_transfer_ct: [u8; 64],
+    /// `Enc(max_per_period)` under `limit_pubkey`.
+    pub max_per_period_ct: [u8; 64],
+    /// `Enc(spent_in_period)`, grown by homomorphic addition on each authorized
+    /// spend so the running total is never in the clear either. Reset to the
+    /// canonical encryption of zero (all-zero bytes) on period rollover.
+    pub spent_in_period_ct: [u8; 64],
 }
 
 impl Policy {
     pub fn holds_custody(&self) -> bool {
         self.custodied_token_account != Pubkey::default()
+    }
+
+    /// True once the owner has replaced the visible limits with encrypted
+    /// ones. While this holds, the plaintext authorization paths refuse rather
+    /// than quietly enforcing a number the owner has stopped treating as the
+    /// real policy.
+    pub fn has_confidential_limits(&self) -> bool {
+        self.limit_pubkey != [0u8; 32]
     }
 
     /// The seeds this program signs with, minus the bump. Kept here so the
