@@ -161,11 +161,9 @@ export default function ProofPage() {
       <div className="step-head" style={{ marginTop: "2.5rem" }}>
         <h3>And the limit is no longer something the agent could route around.</h3>
         <p className="section-sub">
-          Everything above still relies on the agent choosing to ask. Token-2022 confidential
-          transfers refuse delegate authority outright — tested on devnet with an unlimited
-          approval, rejected all the same — so the only way to make the limit structural was to
-          give the policy program the token account itself. Which raises the obvious question:
-          what stops the program, or the agent, from simply keeping it?
+          Token-2022 refuses delegate authority outright, so the only way to bind the limit was to
+          give the program the account itself. Which raises the obvious question: what stops it, or
+          the agent, from keeping it?
         </p>
       </div>
 
@@ -185,11 +183,8 @@ export default function ProofPage() {
       <div className="step-head" style={{ marginTop: "2.5rem" }}>
         <h3>Even the limit itself is no longer a public number.</h3>
         <p className="section-sub">
-          The payments were private; the budget was not. A visible &quot;20 per transfer, 50 per
-          week&quot; sizes a target before an attacker tries anything. So the limits are encrypted
-          too — and the program enforces them without ever reading them. It subtracts the encrypted
-          amount from the encrypted limit and requires a proof the result is not negative. A spend
-          that is over budget has no such proof to give.
+          The program subtracts the encrypted amount from the encrypted limit and requires a proof
+          the result is not negative. An over-budget spend has no such proof to give.
         </p>
       </div>
 
@@ -207,11 +202,9 @@ export default function ProofPage() {
       <div className="proof-item" style={{ marginTop: "14px" }}>
         <div className="proof-label">What this does not claim</div>
         <div className="proof-verdict" style={{ fontSize: "0.85rem", fontWeight: 400 }}>
-          The limit is hidden from the public, not from the agent — producing the proof requires the
-          key, so whoever proves can also read the budget. That is deliberate: an agent needs to know
-          what it may spend, a block explorer does not. And none of this makes Agacy untraceable.
-          Addresses, the mint, and the timing of every payment remain visible on-chain. What is
-          hidden is the amount, the reasoning, and now the budget.
+          Hidden from the public, not from the agent — proving requires the key. And none of this
+          is untraceable: addresses, mint and timing stay visible. Hidden is the amount, the
+          reasoning, and the budget.
         </div>
       </div>
     </div>

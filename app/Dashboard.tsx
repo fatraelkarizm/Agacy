@@ -494,14 +494,7 @@ function PolicyWorkspace({
       <div className="dashboard-workspace-intro">
         <div>
           <h2>Limits live outside the prompt.</h2>
-          <p>
-            Your policy is a program-derived account, so the program itself can sign for it —
-            that is what makes a limit enforceable rather than merely recorded. Handing the
-            program custody of a token account closes the last gap, since Token-2022
-            confidential transfers refuse delegates outright. The run below still checks locally:
-            it uses a throwaway agent key, and persisting a real one is a key-custody decision
-            this build deliberately leaves open.
-          </p>
+          <p>Enforced by a program that signs for the account, not by the agent&apos;s good behaviour.</p>
         </div>
       </div>
       {policy ? (
@@ -565,35 +558,24 @@ function PolicyFact({ label, value, icon: Icon }: { label: string; value: string
 function ConfidentialLimitNote() {
   return (
     <section className="dashboard-panel">
-      <PanelHeader icon={LockKey} title="Why those values are blank" />
+      <PanelHeader icon={LockKey} title="Encrypted limits" />
       <div className="dashboard-policy-body">
-        <p className="dashboard-label">Your budget is not public anymore</p>
-        <strong>The program enforces a limit it cannot read</strong>
-        <span className="dashboard-policy-state">
-          Limits are stored encrypted. Each payment is checked by subtracting ciphertexts and
-          requiring a proof the result is not negative — no comparison of visible numbers happens.
-        </span>
+        <p className="dashboard-label">Enforced without being read</p>
+        <strong>Your budget is not a public number</strong>
         <div className="dashboard-policy-divider" />
         <div className="dashboard-authority-row">
           <Eye aria-hidden="true" size={18} weight="duotone" />
-          <span>You and your agent can still read the budget — both hold the key</span>
+          <span>You and your agent hold the key</span>
         </div>
         <div className="dashboard-authority-row">
           <EyeSlash aria-hidden="true" size={18} weight="duotone" />
-          <span>Anyone reading the chain sees ciphertext, so your spending capacity is not a public number</span>
+          <span>Anyone reading the chain sees ciphertext</span>
         </div>
       </div>
     </section>
   );
 }
 
-/**
- * Custody is the sharpest trade-off in the product, so the panel states both
- * halves rather than presenting it as a feature to switch on. Deliberately
- * has no button: the dashboard's demo run holds no real confidential token
- * account to hand over, and a control that looked live but wasn't would be
- * worse than none.
- */
 function CustodyPanel({ custodiedTokenAccount }: { custodiedTokenAccount: string | null }) {
   const held = custodiedTokenAccount !== null;
   return (
@@ -603,26 +585,16 @@ function CustodyPanel({ custodiedTokenAccount }: { custodiedTokenAccount: string
         <p className="dashboard-label">Who holds the account</p>
         <strong>{held ? "The policy program" : "You do"}</strong>
         <span className="dashboard-policy-state">
-          {held
-            ? `${custodiedTokenAccount.slice(0, 8)}… answers to the policy PDA`
-            : "Delegate mode — the program cannot gate a confidential transfer yet"}
+          {held ? `${custodiedTokenAccount.slice(0, 8)}…` : "Delegate mode"}
         </span>
         <div className="dashboard-policy-divider" />
         <div className="dashboard-authority-row">
           <ShieldCheck aria-hidden="true" size={18} weight="duotone" />
-          <span>
-            {held
-              ? "Every payment must pass the on-chain limit first"
-              : "Token-2022 refuses delegates, so limits stay advisory until you hand it over"}
-          </span>
+          <span>{held ? "Every payment passes the limit first" : "Limits stay advisory until you hand it over"}</span>
         </div>
         <div className="dashboard-authority-row">
           <ShieldWarning aria-hidden="true" size={18} weight="duotone" />
-          <span>
-            {held
-              ? "You can take it back at any time — release is owner-only and ignores the spend budget"
-              : "Handing it over means the program's signature becomes the only way to move funds"}
-          </span>
+          <span>{held ? "You can take it back at any time" : "Handing it over makes the program the only way to move funds"}</span>
         </div>
       </div>
     </section>

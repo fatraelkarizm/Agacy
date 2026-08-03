@@ -1,4 +1,4 @@
-import { generateKeyPairSigner } from "@solana/kit";
+import { generateKeyPairSigner, type KeyPairSigner } from "@solana/kit";
 import {
   buildInitializePolicyV2Instruction,
   derivePolicyAddress,
@@ -34,13 +34,13 @@ import type { WalletConnectionDTO } from "../dto/wallet.dto";
  *   same call, so there is no created-but-uninitialized intermediate state for
  *   anything to observe.
  *
- * Known Stage-1 gap, deliberate rather than overlooked: the agent keypair
- * generated here is ephemeral and its secret is discarded after this call —
- * only its public address is written into the policy account. Persisting an
- * agent signer for a live `authorize` call during a run is blocked on the
- * key-custody decision PRODUCT_EXPERIENCE.md (open decision #2) and
- * PRIVACY_ARCHITECTURE.md (open decision #2) both leave open; deciding it
- * silently here would be exactly what those documents say not to do.
+ * The agent keypair generated here is returned to the caller and kept for the
+ * browser session only — never stored, never transmitted. That is what lets the
+ * run sign a real `authorize` against this account instead of deciding locally
+ * and claiming it had. How a long-lived agent should hold a key is still the
+ * open question PRODUCT_EXPERIENCE.md (decision #2) and PRIVACY_ARCHITECTURE.md
+ * (decision #2) describe, and a key that dies with the tab deliberately answers
+ * none of it.
  */
 
 export interface ProvisionAgentPolicyParams {
@@ -54,6 +54,18 @@ export interface ProvisionAgentPolicyResultDTO {
   readonly agentAddress: string;
   readonly signature: string;
   readonly programId: string;
+  /**
+   * The agent's signer, held for the lifetime of the browser session and
+   * nothing longer — never written to storage, never sent anywhere. Without it
+   * the agent cannot sign `authorize`, and the run could only ever pretend to
+   * enforce a limit; with it, the enforcement is the chain's.
+   *
+   * This is the narrowest form of the key-custody question PRODUCT_EXPERIENCE.md
+   * (open decision #2) leaves open, and it is answered narrowly on purpose:
+   * a key that dies with the tab commits to nothing about how a long-lived
+   * agent should hold one.
+   */
+  readonly agentSigner: KeyPairSigner;
 }
 
 export async function provisionAgentPolicy(
@@ -81,5 +93,6 @@ export async function provisionAgentPolicy(
     agentAddress: agentSigner.address,
     signature,
     programId: POLICY_V2_PROGRAM_ID,
+    agentSigner,
   };
 }

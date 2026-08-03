@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { runAgent, type AgentStep, type AgentTask } from "../../agent/loop";
+import { address, type KeyPairSigner } from "@solana/kit";
+import type { AgentStep, AgentTask } from "../../agent/loop";
 import type {
   AgentDraftDTO,
   AgentExecutionDTO,
@@ -24,6 +25,7 @@ import { AgentSetup } from "../AgentSetup";
 import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
+import { runAgentOnChain } from "../../server/services/agent-run";
 import { fetchOnChainPolicyStatus } from "../../server/services/spend-policy";
 import { createDevnetClient } from "../../server/data/solana-client";
 import type { OnChainPolicyStatusDTO } from "../../server/dto/agent.dto";
@@ -128,9 +130,17 @@ export default function DashboardPage() {
   const [done, setDone] = useState(false);
   const [ownerView, setOwnerView] = useState(false);
   const [showAttackSim, setShowAttackSim] = useState(false);
-  const lastReasoning = useRef("");
+  const [runError, setRunError] = useState<string | null>(null);
+  /**
+   * Memory only, deliberately. Persisting it would mean writing an agent's
+   * signing key to browser storage, which is the decision PRODUCT_EXPERIENCE.md
+   * leaves open — so a refresh loses the ability to run, and the UI says so
+   * rather than silently falling back to a fake run.
+   */
+  const agentSignerRef = useRef<KeyPairSigner | null>(null);
 
   const reset = useCallback(() => {
+    setRunError(null);
     setSteps([]);
     setExecuted([]);
     setDone(false);
@@ -254,7 +264,12 @@ export default function DashboardPage() {
           ownerWallet,
           draft,
         });
-        setProvisionedPolicy(result);
+        agentSignerRef.current = result.agentSigner;
+        setProvisionedPolicy({
+          policyAccount: result.policyAccount,
+          agentAddress: result.agentAddress,
+          signature: result.signature,
+        });
         setAgent(draft);
         setPolicy(toSpendPolicy(draft));
         reset();
@@ -272,33 +287,81 @@ export default function DashboardPage() {
     [ownerWallet, reset],
   );
 
+  /**
+   * Every verdict below comes from the deployed program, not from this file.
+   * Each task sends a real `authorize` to devnet signed by the agent, so an
+   * approval has a signature you can open and a refusal is the program's own
+   * error. The previous version decided locally and then announced it had sent
+   * something, which was not true.
+   */
   const run = useCallback(async () => {
-    if (!policy) return;
+    const agentSigner = agentSignerRef.current;
+    if (!policy || !provisionedPolicy || !ownerWallet || !agentSigner) return;
+
     reset();
     setRunning(true);
-    lastReasoning.current = "";
+    setRunError(null);
 
-    await runAgent({
-      tasks: agent?.purpose === "procurement" ? PROCUREMENT_TASKS : PERSONAL_TASKS,
-      policy,
-      initialState: { availableBalance: INITIAL_BALANCE, spentThisPeriod: 0n },
-      onStep: async (step) => {
-        if (step.kind === "think") lastReasoning.current = step.text;
-        setSteps((prev) => [...prev, step]);
-        if (step.kind === "execute" && step.amount !== undefined) {
-          const amount = step.amount;
-          setExecuted((prev) => [
-            ...prev,
-            { amount, recipient: step.recipient ?? "", reasoning: lastReasoning.current },
-          ]);
-        }
-        await new Promise((resolve) => setTimeout(resolve, 620));
-      },
-    });
+    const tasks = (agent?.purpose === "procurement" ? PROCUREMENT_TASKS : PERSONAL_TASKS).map(
+      (task) => ({
+        label: task.recipientLabel,
+        reasoning: task.prompt,
+        amount: task.amount,
+        recipient: task.recipient,
+      }),
+    );
+
+    try {
+      await runAgentOnChain({
+        client: devnetClient,
+        ownerWallet,
+        policyAccount: address(provisionedPolicy.policyAccount),
+        agentSigner,
+        tasks,
+        onStep: ({ task, outcome }) => {
+          const next: AgentStep[] = [
+            { kind: "think", text: task.reasoning },
+            {
+              kind: "decide",
+              text: `Proposes sending ${formatTokens(task.amount)} to ${task.label}.`,
+              amount: task.amount,
+              recipient: task.recipient,
+            },
+          ];
+
+          if (outcome.status === "authorized") {
+            next.push({
+              kind: "policy",
+              text: "Authorized on-chain by the policy program.",
+            });
+            next.push({
+              kind: "execute",
+              text: outcome.signature,
+              amount: task.amount,
+              recipient: task.recipient,
+            });
+            setExecuted((prev) => [
+              ...prev,
+              { amount: task.amount, recipient: task.recipient, reasoning: task.reasoning },
+            ]);
+          } else {
+            next.push({ kind: "refused", text: outcome.reason });
+          }
+
+          setSteps((prev) => [...prev, ...next]);
+        },
+      });
+    } catch (error) {
+      setRunError(
+        error instanceof Error
+          ? error.message
+          : "The run could not reach devnet. Check your wallet and SOL balance.",
+      );
+    }
 
     setRunning(false);
     setDone(true);
-  }, [agent, policy, reset]);
+  }, [agent, ownerWallet, policy, provisionedPolicy, reset]);
 
   if (checkingSession || !ownerWallet) {
     return (
@@ -351,14 +414,7 @@ export default function DashboardPage() {
           <div className="dashboard-workspace-intro">
             <div>
               <h2>Watch {agent.name} work.</h2>
-              <p>
-                A scripted walkthrough of the decision flow, over a fixed set of vendors — so it
-                runs the same way every time, with no API key and no funds at risk. The policy
-                verdicts are the real engine, so the refusal below is a genuine evaluation rather
-                than a staged one. Nothing here is broadcast to a cluster. The real agent — an
-                actual model choosing its own tools, paying real devnet accounts — runs from the
-                terminal, and its recorded output is on the proof page.
-              </p>
+              <p>Every verdict below is signed to devnet by the agent and decided by the program.</p>
             </div>
             <span className="hint">
               Max {formatTokens(policy.maxPerTransfer)} USDC per transfer
@@ -367,20 +423,25 @@ export default function DashboardPage() {
 
           {provisionedPolicy && (
             <p className="hint">
-              Policy account created on devnet:{" "}
+              Policy account:{" "}
               <a
                 href={`https://explorer.solana.com/address/${provisionedPolicy.policyAccount}?cluster=devnet`}
                 target="_blank"
                 rel="noreferrer"
               >
                 {provisionedPolicy.policyAccount.slice(0, 8)}…
-              </a>{" "}
-              with these limits — that account is real, and you can open it. The walkthrough below
-              does not sign against it: it uses a throwaway agent key, and keeping a real one is a
-              key-custody decision this build deliberately leaves open. The enforcement path itself
-              is built and verified on devnet — see the proof page.
+              </a>
             </p>
           )}
+
+          {!agentSignerRef.current && (
+            <p className="hint">
+              The agent key lives in this tab only and was lost on refresh. Create an agent again to
+              run.
+            </p>
+          )}
+
+          {runError && <p className="hint">{runError}</p>}
 
           <div className="controls">
             <button className="primary" onClick={run} disabled={running}>
@@ -448,7 +509,21 @@ function AgentConsole({ steps, running }: { steps: AgentStep[]; running: boolean
         {steps.map((step, i) => (
           <div className={`step step-${step.kind}`} key={i}>
             <span className="step-kind">{STEP_LABEL[step.kind]}</span>
-            <span className="step-text">{step.text}</span>
+            {/* An approval's text is its signature — rendered as a link so the
+                claim can be checked rather than taken. */}
+            <span className="step-text">
+              {step.kind === "execute" ? (
+                <a
+                  href={`https://explorer.solana.com/tx/${step.text}?cluster=devnet`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {step.text.slice(0, 24)}…
+                </a>
+              ) : (
+                step.text
+              )}
+            </span>
           </div>
         ))}
       </div>
