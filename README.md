@@ -2,27 +2,90 @@
 
 **Agentic Privacy for AI Agents**
 
-AI agents are starting to hold and spend real money on their own — treasury bots, procurement
-agents, DAO-delegated spenders. Today that means two bad defaults: either the agent's every payment,
-balance, and counterparty sits on a fully public ledger forever, or the only "limit" on what it can
-spend is a system-prompt instruction a bug or a prompt injection can talk it out of. Agacy is a
-confidential agent wallet where **spend limits are a property of an on-chain account, not a request
-to the model**, and the agent's balance, transfer amounts, and decision reasoning stay encrypted —
-readable only by whoever the owner explicitly authorizes.
-
 Built for NTU InnovateX Hackathon 2026 (NTU CCTF x SNZ).
 
-## Who this is for
+## Project Overview
 
-A DAO or business delegating a bounded budget to an autonomous agent — paying contributors,
-suppliers, or infrastructure vendors — where the **treasury committee, multisig signers, or a
-finance lead are "authorized"**: they can decrypt full transaction detail and the agent's reasoning
-for audit, while the public (and, pointedly, rival DAOs or competitors trying to estimate your
-runway or poach your contributors by reading your treasury's on-chain history) see only that a
-transaction happened, not what moved or why. The onboarding flow's "Procurement" persona and the
-in-app attacker/competitor simulation both model this exact scenario end to end.
+### The problem
 
-## What's actually original here
+AI agents already hold wallets and transact on-chain without a human approving each payment —
+treasury bots, procurement agents, DAO-delegated spenders. On-chain agent activity has grown
+sharply as rails like Coinbase's x402 scale to hundreds of millions of agent payments. Every one of
+those payments is permanently public by default: anyone who links an agent's wallet to its owner —
+a KYC'd on-ramp, an address posted once — can read its full balance and every payment it has ever
+made. That is not theoretical; wallet-drainer losses reached roughly $500M in 2024, and phishing
+losses have kept climbing even as victim counts fall, meaning attackers are already shifting from
+spraying everyone to picking targets by reading balances first. An agent that transacts continuously
+and predictably is easier to profile and target than a human's occasional activity. The second
+default is just as bad: the only "spend limit" most agent wallets have today is a system-prompt
+instruction, which a bug or a prompt injection can talk the agent out of — a limit that lives inside
+the model's reasoning is not really a limit.
+
+### The proposed solution
+
+Agacy is a confidential AI agent wallet on Solana where **spend limits are a property of an
+on-chain account, not a request to the model**, and the agent's balance, transfer amounts, and
+decision reasoning stay encrypted — readable only by whoever the owner explicitly authorizes. It
+combines three things, only one of which is a Solana primitive:
+
+1. **Confidential balances and amounts** via Token-2022 Confidential Transfer — the rail, not the
+   invention. A public observer sees a confirmed transaction and nothing about its size.
+2. **A spend-policy program that makes limits structural, not requested.** A deployed on-chain
+   program owns the policy account; the agent can only spend what the account allows, never what it
+   claims it needs — verified by having the program itself act as the token account's delegate and
+   reject an over-limit transfer even when the raw token-level approval would have permitted it.
+3. **Encrypted reasoning, not just encrypted balances.** Confidential Transfer hides *how much*
+   moved; it says nothing about *why*. Agacy encrypts the agent's plain-language reasoning and
+   carries the ciphertext on-chain, so the audit trail for *why* an agent paid is as protected as
+   the amount itself.
+
+### Key features
+
+- Confidential transfers verified end-to-end on devnet (all three required ZK proofs: equality,
+  ciphertext validity, range).
+- An on-chain spend-policy program enforcing per-transfer and rolling-period limits, deployed to
+  devnet, that the agent cannot self-modify or talk its way past.
+- A delegate-binding mechanism proven to move real tokens on live devnet as a real SPL delegate,
+  and to reject an over-limit transfer even when the raw delegate approval was set higher.
+- Encrypted agent reasoning, carried on-chain and verified absent from the raw transaction bytes.
+- A public/authorized view split enforced by the type system, not a UI toggle — a public view is
+  structurally incapable of holding a decrypted amount.
+- A narrated adversarial simulation (attacker or competitor scan) run against both an ordinary
+  wallet and Agacy's side by side, live in the demo.
+
+### Target users
+
+- **DAO treasury committees / multisig signers** delegating a bounded budget to an agent that pays
+  contributors, grants, or infrastructure vendors — need full audit access themselves while keeping
+  treasury runway and payment cadence hidden from rival DAOs or opportunistic poachers reading
+  on-chain history.
+- **Startup or SME finance leads running a procurement agent** that pays suppliers or vendors — need
+  to keep supplier pricing, spend velocity, and vendor relationships hidden from competitors who
+  would otherwise infer deal terms or company runway from public wallet activity.
+- **Individual power users delegating a personal trading or spending agent** — want automation
+  without turning every transaction into permanently public data a stranger could use to profile or
+  target them.
+
+The onboarding flow's "Procurement" persona and the in-app attacker/competitor simulation model the
+DAO/business scenario end to end; "Personal" framing models the individual case with the same
+underlying mechanism.
+
+### Technologies
+
+- **Chain:** Solana (devnet for the hackathon build)
+- **Confidential transfer:** Token-2022 Confidential Transfer, `@solana/zk-sdk`, ZK ElGamal Proof program
+- **On-chain enforcement:** custom spend-policy program — native Rust (deployed) and an Anchor/PDA
+  rewrite enabling delegate binding (deployed, litesvm-tested)
+- **Encrypted reasoning:** AES-GCM (Web Crypto), carried on-chain via SPL Memo
+- **Agent layer:** Solana Agent Kit
+- **App:** Next.js + TypeScript, `@solana/kit`
+
+## Technical deep dive
+
+The rest of this document goes deeper into what's actually built and how each claim above is
+verified — not just asserted.
+
+### What's actually original here
 
 **Solana's Token-2022 Confidential Transfer is the rail, not the invention** — it's a protocol
 primitive Agacy uses, the same way any app uses SPL Token. The parts built for this project:
@@ -47,7 +110,7 @@ primitive Agacy uses, the same way any app uses SPL Token. The parts built for t
   was deliberately set higher. This is what makes the earlier "spend limits are unbypassable" claim
   structural rather than aspirational — see the caveat below on what it still doesn't prove.
 
-## How it works
+### How it works
 
 The owner connects a wallet and defines an agent with a spending policy (max per transfer, max per
 period). Provisioning writes that policy to a real devnet account the agent cannot self-modify. The
@@ -56,14 +119,9 @@ executes through Token-2022 Confidential Transfer, so a public observer sees a c
 with no readable amount or balance. Whoever the owner authorizes can decrypt full detail, including
 the agent's reasoning for the action.
 
-## Stack
-- **Chain:** Solana (devnet for the hackathon build)
-- **On-chain privacy:** Solana Confidential Transfer (Token-2022 extension) — live, verified below
-- **On-chain enforcement:** custom spend-policy program (native Solana program), deployed to devnet
-- **Agent layer:** Solana Agent Kit
-- **App:** Next.js + TypeScript
+### Delegate binding
 
-**Delegate binding — compiled, tested, deployed, and proven live on devnet with real token
+**Compiled, tested, deployed, and proven live on devnet with real token
 movement.** `programs/agacy_policy_v2` passes 11/11 Rust integration tests (litesvm) and is deployed
 at [`783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G`](https://explorer.solana.com/address/783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G?cluster=devnet).
 `npm run verify-delegate-binding` (`scripts/verify-delegate-binding-devnet.ts`) goes further than
@@ -84,7 +142,7 @@ program (`AmJYcUrs36n…`), so `agacy_policy_v2` is proven standalone, not live 
 Arcium-based confidential policy logic (hiding the limit values themselves) is a separate, unstarted
 candidate for the same layer.
 
-## Verified on devnet
+### Verified on devnet
 
 | | |
 |---|---|
@@ -96,7 +154,7 @@ candidate for the same layer.
 Re-run `npm run capture-proof` any time to re-verify both claims against a fresh transaction rather
 than trusting a screenshot.
 
-130 tests passing (120 TypeScript, 10 Rust).
+141 tests passing (120 TypeScript, 21 Rust — 10 native `program/`, 11 Anchor/litesvm `agacy_policy_v2`).
 
 ## Run it
 
@@ -109,4 +167,4 @@ npm run capture-proof      # re-record the on-chain evidence
 ```
 
 ## Project docs
-Planning documents (`PRD`, `FEATURES`, `INFRASTRUCTURE`, `ARCHITECTURE`, competitive/market research) are kept local and are not published to this repo — see `AGENTS.md` for the contributor-facing summary of architecture rules and available agent skills.
+Planning documents (`PRD`, `FEATURES`, `INFRASTRUCTURE`, `ARCHITECTURE`, competitive/market research) are kept local and are not published to this repo.

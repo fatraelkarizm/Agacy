@@ -1,4 +1,5 @@
 /docs/
+AGENTS.md
 node_modules/
 .env
 .env.local
