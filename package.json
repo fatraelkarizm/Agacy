@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "capture-proof": "tsx scripts/capture-devnet-proof.ts",
-    "verify-delegate-binding": "tsx scripts/verify-delegate-binding-devnet.ts"
+    "verify-delegate-binding": "tsx scripts/verify-delegate-binding-devnet.ts",
+    "verify-confidential-delegate": "tsx scripts/verify-confidential-delegate-devnet.ts"
   },
   "repository": {
     "type": "git",
