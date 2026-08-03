@@ -16,6 +16,7 @@
     "verify-confidential-limits": "tsx scripts/verify-confidential-limits-devnet.ts",
     "verify-agent-run": "tsx scripts/verify-agent-run-devnet.ts",
     "verify-attacks": "tsx scripts/verify-attacks-devnet.ts",
+    "verify-custody-ui": "tsx scripts/verify-custody-ui-devnet.ts",
     "agent": "tsx scripts/run-autonomous-agent.ts",
     "agent:mainnet": "cross-env AGACY_CLUSTER=mainnet tsx scripts/run-autonomous-agent.ts"
   },

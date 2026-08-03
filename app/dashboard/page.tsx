@@ -32,6 +32,13 @@ import {
   type AttackDefinition,
   type AttackResult,
 } from "../../server/services/agent-attacks";
+import {
+  createCustodyAccount,
+  handOverCustody,
+  readTokenAccountOwner,
+  takeBackCustody,
+  type CustodyAccountDTO,
+} from "../../server/services/custody-demo";
 import { fetchOnChainPolicyStatus } from "../../server/services/spend-policy";
 import { createDevnetClient } from "../../server/data/solana-client";
 import type { OnChainPolicyStatusDTO } from "../../server/dto/agent.dto";
@@ -146,6 +153,10 @@ export default function DashboardPage() {
   const agentSignerRef = useRef<KeyPairSigner | null>(null);
   const [attackResults, setAttackResults] = useState<Record<string, AttackResult>>({});
   const [attackRunning, setAttackRunning] = useState<string | null>(null);
+  const [custodyAccount, setCustodyAccount] = useState<CustodyAccountDTO | null>(null);
+  const [custodyHolder, setCustodyHolder] = useState<string | null>(null);
+  const [custodyBusy, setCustodyBusy] = useState(false);
+  const [custodyError, setCustodyError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setRunError(null);
@@ -406,6 +417,44 @@ export default function DashboardPage() {
     [ownerWallet, policy, provisionedPolicy],
   );
 
+  /**
+   * Create, hand over, take back. Each step re-reads the token account's owner
+   * from chain afterwards rather than assuming the transaction did what it was
+   * meant to — the panel should show what is true, not what was requested.
+   */
+  const custodyAction = useCallback(
+    async (action: "create" | "hand-over" | "take-back") => {
+      if (!ownerWallet || !provisionedPolicy) return;
+      setCustodyBusy(true);
+      setCustodyError(null);
+      try {
+        let account = custodyAccount;
+        if (action === "create") {
+          account = await createCustodyAccount({ client: devnetClient, ownerWallet });
+          setCustodyAccount(account);
+        } else if (account) {
+          const transition = action === "hand-over" ? handOverCustody : takeBackCustody;
+          await transition({
+            client: devnetClient,
+            ownerWallet,
+            policyAccount: address(provisionedPolicy.policyAccount),
+            tokenAccount: address(account.tokenAccount),
+          });
+        }
+        if (account) {
+          setCustodyHolder(await readTokenAccountOwner(devnetClient, address(account.tokenAccount)));
+        }
+      } catch (error) {
+        setCustodyError(
+          error instanceof Error ? error.message : "The custody transaction did not go through.",
+        );
+      } finally {
+        setCustodyBusy(false);
+      }
+    },
+    [custodyAccount, ownerWallet, provisionedPolicy],
+  );
+
   if (checkingSession || !ownerWallet) {
     return (
       <div className="wrap step-page">
@@ -525,6 +574,15 @@ export default function DashboardPage() {
               onRun={(attack) => void runOneAttack(attack)}
             />
           )}
+
+          <CustodyControls
+            account={custodyAccount}
+            holder={custodyHolder}
+            policyAccount={provisionedPolicy?.policyAccount ?? null}
+            busy={custodyBusy}
+            error={custodyError}
+            onAction={(action) => void custodyAction(action)}
+          />
 
           {showAttackSim && executed.length > 0 && (
             <AttackSimulationPanel
@@ -697,6 +755,89 @@ function ConfidentialPanel({
  * that always says "blocked" would be decoration. A breach renders as a breach,
  * with the signature, because an attack demo that cannot fail proves nothing.
  */
+/**
+ * The custody transition, performed rather than described.
+ *
+ * `holder` is read back from the token account after every action, so what this
+ * shows is the chain's answer to "who owns this", not a local guess about
+ * whether the last transaction worked.
+ */
+function CustodyControls({
+  account,
+  holder,
+  policyAccount,
+  busy,
+  error,
+  onAction,
+}: {
+  account: CustodyAccountDTO | null;
+  holder: string | null;
+  policyAccount: string | null;
+  busy: boolean;
+  error: string | null;
+  onAction: (action: "create" | "hand-over" | "take-back") => void;
+}) {
+  const heldByProgram = holder !== null && policyAccount !== null && holder === policyAccount;
+
+  return (
+    <section className="card">
+      <div className="panel-head">
+        <div>
+          <div className="panel-title">Token account custody</div>
+          <div className="panel-note">
+            {account
+              ? heldByProgram
+                ? "The program owns this account. Only it can move the funds."
+                : "You own this account."
+              : "Create an account to hand over."}
+          </div>
+        </div>
+      </div>
+      <div className="console-body">
+        {account && (
+          <div className="step step-observe">
+            <span className="step-kind">account</span>
+            <span className="step-text">
+              <a
+                href={`https://explorer.solana.com/address/${account.tokenAccount}?cluster=devnet`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {account.tokenAccount.slice(0, 24)}…
+              </a>
+              <br />
+              <span style={{ opacity: 0.62 }}>owner: {holder ?? "checking…"}</span>
+            </span>
+          </div>
+        )}
+        {error && (
+          <div className="step step-refused">
+            <span className="step-kind">failed</span>
+            <span className="step-text">{error}</span>
+          </div>
+        )}
+        <div className="controls">
+          {!account && (
+            <button onClick={() => onAction("create")} disabled={busy || !policyAccount}>
+              {busy ? "Sending…" : "Create token account"}
+            </button>
+          )}
+          {account && !heldByProgram && (
+            <button className="primary" onClick={() => onAction("hand-over")} disabled={busy}>
+              {busy ? "Sending…" : "Hand over to the program"}
+            </button>
+          )}
+          {account && heldByProgram && (
+            <button onClick={() => onAction("take-back")} disabled={busy}>
+              {busy ? "Sending…" : "Take it back"}
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function AttackConsole({
   attacks,
   results,
