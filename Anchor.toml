@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-agacy_policy_v2 = "783Eojkn9uMHtNCiM6yiTecRrdddFM7xEiwBu7Sxxm1G"
+agacy_policy_v2 = "9sYKkYh1GTKY2whkGPGXuG1VKiYqfiwyjVcpQbYtHtwW"
 
 [provider]
 cluster = "devnet"

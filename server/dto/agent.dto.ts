@@ -80,4 +80,11 @@ export interface OnChainPolicyStatusDTO {
   readonly spentInPeriod: bigint;
   /** Unix seconds the current period started. */
   readonly periodStart: bigint;
+  /**
+   * The token account the policy program owns outright, or `null` when the
+   * owner still holds it themselves. This is the difference between a limit
+   * the agent must route through and one it could route around, so it is
+   * surfaced rather than left implicit.
+   */
+  readonly custodiedTokenAccount: string | null;
 }

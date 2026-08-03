@@ -12,6 +12,7 @@
     "capture-proof": "tsx scripts/capture-devnet-proof.ts",
     "verify-delegate-binding": "tsx scripts/verify-delegate-binding-devnet.ts",
     "verify-confidential-delegate": "tsx scripts/verify-confidential-delegate-devnet.ts",
+    "verify-custody": "tsx scripts/verify-custody-devnet.ts",
     "agent": "tsx scripts/run-autonomous-agent.ts",
     "agent:mainnet": "cross-env AGACY_CLUSTER=mainnet tsx scripts/run-autonomous-agent.ts"
   },

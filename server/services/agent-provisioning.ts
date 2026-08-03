@@ -1,5 +1,9 @@
 import { generateKeyPairSigner } from "@solana/kit";
-import { buildProvisionPolicyAccountInstructions } from "../data/policy-program";
+import {
+  buildInitializePolicyV2Instruction,
+  derivePolicyAddress,
+  POLICY_V2_PROGRAM_ID,
+} from "../data/policy-program-v2";
 import { sendInstructionsWithSigner } from "../data/solana-client";
 import type { SolanaClient } from "../data/solana-client";
 import { getOwnerTransactionSigner } from "./wallet-connection";
@@ -12,6 +16,23 @@ import type { WalletConnectionDTO } from "../dto/wallet.dto";
  * the connected owner wallet. This is the one part of onboarding that
  * actually touches devnet — everything before it (draft, policy preview) is
  * local until this call succeeds.
+ *
+ * Targets `agacy_policy_v2` rather than the original native program, and the
+ * difference is not cosmetic: a v2 policy account is a PDA the program can
+ * sign for, which is what lets the limit be *enforced* by custody rather than
+ * merely recorded alongside a spend. Provisioning through the native program
+ * produced an account that could only ever observe a payment. See
+ * docs/PRIVACY_ARCHITECTURE.md §14.
+ *
+ * Two consequences worth knowing at the call site:
+ *
+ * - No separate account keypair is generated or funded. The address is
+ *   derived from `[b"policy", owner, agent]`, so the same owner/agent pair
+ *   always resolves to the same account rather than quietly creating a second
+ *   one.
+ * - It is a single instruction. Anchor's `init` allocates and writes in the
+ *   same call, so there is no created-but-uninitialized intermediate state for
+ *   anything to observe.
  *
  * Known Stage-1 gap, deliberate rather than overlooked: the agent keypair
  * generated here is ephemeral and its secret is discarded after this call —
@@ -32,18 +53,20 @@ export interface ProvisionAgentPolicyResultDTO {
   readonly policyAccount: string;
   readonly agentAddress: string;
   readonly signature: string;
+  readonly programId: string;
 }
 
 export async function provisionAgentPolicy(
   params: ProvisionAgentPolicyParams,
 ): Promise<ProvisionAgentPolicyResultDTO> {
-  const policyAccountSigner = await generateKeyPairSigner();
   const agentSigner = await generateKeyPairSigner();
   const ownerSigner = getOwnerTransactionSigner(params.ownerWallet);
   const policy = toPolicyInitParams(params.draft);
 
-  const instructions = await buildProvisionPolicyAccountInstructions(params.client, {
-    policyAccount: policyAccountSigner,
+  const policyAccount = await derivePolicyAddress(ownerSigner.address, agentSigner.address);
+
+  const instruction = buildInitializePolicyV2Instruction({
+    policyAccount,
     owner: ownerSigner,
     agent: agentSigner.address,
     maxPerTransfer: policy.maxPerTransfer,
@@ -51,11 +74,12 @@ export async function provisionAgentPolicy(
     periodSeconds: policy.periodSeconds,
   });
 
-  const signature = await sendInstructionsWithSigner(params.client, ownerSigner, instructions);
+  const signature = await sendInstructionsWithSigner(params.client, ownerSigner, [instruction]);
 
   return {
-    policyAccount: policyAccountSigner.address,
+    policyAccount,
     agentAddress: agentSigner.address,
     signature,
+    programId: POLICY_V2_PROGRAM_ID,
   };
 }

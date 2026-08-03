@@ -38,5 +38,9 @@ pub fn handle_initialize(
     policy.spent_in_period = 0;
     policy.period_start = Clock::get()?.unix_timestamp;
     policy.bump = ctx.bumps.policy;
+    // A fresh policy holds nothing. Written explicitly rather than relying on
+    // `init` zeroing the account, so the "no custody" state is a stated
+    // invariant of this handler and not an accident of allocation.
+    policy.custodied_token_account = Pubkey::default();
     Ok(())
 }

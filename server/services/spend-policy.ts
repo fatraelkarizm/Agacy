@@ -1,4 +1,4 @@
-import { fetchPolicyAccount } from "../data/policy-program";
+import { fetchPolicyV2Account } from "../data/policy-program-v2";
 import type { SolanaClient } from "../data/solana-client";
 import { address } from "@solana/kit";
 import type {
@@ -89,12 +89,18 @@ export function evaluateSpendPolicy(
  * Read the real state of a provisioned policy account, for the Policies
  * dashboard view. Returns `null` when the account doesn't exist yet (not
  * provisioned) rather than throwing — that's an expected state, not an error.
+ *
+ * Reads `agacy_policy_v2`, which is what provisioning now writes. Accounts
+ * created by the earlier native program have a different layout and will
+ * throw here rather than be misread — deliberately, since silently decoding
+ * one program's bytes with another's field offsets is exactly the failure
+ * mode the explicit layouts in both clients exist to prevent.
  */
 export async function fetchOnChainPolicyStatus(
   client: SolanaClient,
   policyAccount: string,
 ): Promise<OnChainPolicyStatusDTO | null> {
-  const state = await fetchPolicyAccount(client, address(policyAccount));
+  const state = await fetchPolicyV2Account(client, address(policyAccount));
   if (!state) return null;
 
   return {
@@ -106,5 +112,6 @@ export async function fetchOnChainPolicyStatus(
     periodSeconds: state.periodSeconds,
     spentInPeriod: state.spentInPeriod,
     periodStart: state.periodStart,
+    custodiedTokenAccount: state.custodiedTokenAccount,
   };
 }

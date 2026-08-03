@@ -1,0 +1,72 @@
+{
+  "capturedAt": "2026-08-03T09:23:55.145Z",
+  "cluster": "devnet",
+  "programId": "9sYKkYh1GTKY2whkGPGXuG1VKiYqfiwyjVcpQbYtHtwW",
+  "ownerAddress": "5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5",
+  "agentAddress": "5f4LGN5Ra4V4joqqbfAb7TxpCJYhzFEcQybdLD2i4eNs",
+  "policyAccount": "Hpvgn9rjh2qXP2jK54QFoJctiosucatPf9nwEZwnTs5s",
+  "mint": "6S2Qi2pATujxczz9X6tuoPiVCsuRGLCAwC167uuADcZr",
+  "custodiedTokenAccount": "EMea42UWsNztjnb1bn92NeSFCEKBc98J5SJ7cPx3ZUro",
+  "vendorAccount": "B6jqnJRxHNwYytU1TrVuuGksqQzBfv457FiyJgsUR6tt",
+  "policy": {
+    "maxPerTransfer": "4000000",
+    "maxPerPeriod": "6000000",
+    "periodSeconds": "3600"
+  },
+  "signatures": {
+    "assumeCustody": "4kWSKRXvJPqYFq4JS3p5TimjrKgYagWJBWSLwrDb1wFVSz5zZvsc8KKtLYPXY1t79XtaYCE157UcF3nMWJ2Wp9c",
+    "confidentialTransfer": "2TreZAT1b5gGSFqCSuAmu3up2C73CdpU4pxUh9chH3ZhxpoNfaJerAiv7JkTYU1buiQAPgxC9eByDtnSe95NsHWR",
+    "releaseCustody": "an3NQUkkWvM8RMYTnarZWaS2ByHjW9cLcVn4VZ74avSpVRgD7z5BW5qavN49uG9QXCk4aJza47jcYNsjPsDve9z"
+  },
+  "transferredAmount": "2500000",
+  "checks": [
+    {
+      "step": "policy provisioned as a PDA the program can sign for",
+      "expected": "owner=5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5 agent=5f4LGN5Ra4V4joqqbfAb7TxpCJYhzFEcQybdLD2i4eNs custody=none",
+      "observed": "owner=5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5 agent=5f4LGN5Ra4V4joqqbfAb7TxpCJYhzFEcQybdLD2i4eNs custody=none",
+      "ok": true
+    },
+    {
+      "step": "the token account's real on-chain owner is now the policy PDA",
+      "expected": "Hpvgn9rjh2qXP2jK54QFoJctiosucatPf9nwEZwnTs5s (was 5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5)",
+      "observed": "Hpvgn9rjh2qXP2jK54QFoJctiosucatPf9nwEZwnTs5s",
+      "ok": true
+    },
+    {
+      "step": "the agent cannot buy the account with one unit of its budget",
+      "expected": "rejected with ForbiddenCpiInstruction (6007), account still owned by the policy PDA",
+      "observed": "error 6007 | owner=Hpvgn9rjh2qXP2jK54QFoJctiosucatPf9nwEZwnTs5s",
+      "ok": true
+    },
+    {
+      "step": "a real Token-2022 confidential transfer moved value with the policy PDA as authority",
+      "expected": "sender 7500000, vendor 2500000 (both decrypted from chain)",
+      "observed": "sender 7500000, vendor 2500000",
+      "ok": true
+    },
+    {
+      "step": "the transfer was charged against the period budget",
+      "expected": "2500000 of 6000000",
+      "observed": "2500000 of 6000000",
+      "ok": true
+    },
+    {
+      "step": "an over-limit transfer is refused by the running program",
+      "expected": "4000001 rejected with ExceedsPerTransferLimit (6001), period total unchanged at 2500000",
+      "observed": "error 6001 | spent=2500000",
+      "ok": true
+    },
+    {
+      "step": "the owner can take the account back, unconditionally",
+      "expected": "5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5, policy record cleared",
+      "observed": "5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5, record=cleared",
+      "ok": true
+    },
+    {
+      "step": "and the recovered account is genuinely usable by its owner again",
+      "expected": "8500000 after an owner-signed deposit",
+      "observed": "8500000",
+      "ok": true
+    }
+  ]
+}
