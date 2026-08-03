@@ -181,12 +181,53 @@ than trusting a screenshot.
 
 ## Run it
 
+### Prerequisites
+- Node.js 22 or newer, and npm
+- `npm run dev` and `npm test` need nothing further. Any script that actually touches devnet
+  (`capture-proof`, `verify-delegate-binding`, `agent`, …) needs a **funded** devnet keypair — the
+  easiest way is the [Solana CLI](https://solana.com/docs/intro/installation): run
+  `solana-keygen new` once, then `solana airdrop 2 --url devnet`, and these scripts pick that
+  keypair up automatically. No wallet extension or manual funding step beyond that one airdrop.
+
+### Install
+
 ```bash
+git clone https://github.com/fatraelkarizm/Agacy.git
+cd Agacy
 npm install
-npm run dev                    # landing page + live agent demo
-npm test                       # unit tests
-npm run test:integration       # devnet round trip (needs AGACY_RPC_URL)
-npm run capture-proof          # re-record the on-chain evidence
+```
+
+### Configure (optional — only to override defaults or run the autonomous agent)
+
+`npm run dev` and `npm test` need no `.env.local` at all. The devnet scripts pick up your funded
+Solana CLI keypair automatically (see Prerequisites) with no configuration either — create
+`.env.local` only to point at a different RPC/keypair or to enable the autonomous agent:
+
+```bash
+# Devnet — optional, only needed to override the CLI keypair/public RPC above
+AGACY_RPC_URL=https://api.devnet.solana.com
+AGACY_PAYER_SECRET_KEY=[1,2,3,...]      # JSON byte array of a funded devnet keypair's secret key
+
+# Required only to run the autonomous agent (`npm run agent`)
+LLM_API_KEY=sk-...
+BASE_URL=https://api.openai.com/v1       # any OpenAI-compatible endpoint
+
+# Only needed for the mainnet swap capability (`npm run agent:mainnet`) — omitting any one
+# of these refuses the run before it touches a wallet, on purpose
+AGACY_CLUSTER=mainnet
+AGACY_MAINNET_PAYER_SECRET_KEY=[1,2,3,...]  # a dedicated mainnet keypair, never the devnet one
+AGACY_MAINNET_CONFIRM=i-understand-this-spends-real-money
+AGACY_MAINNET_MAX_SPEND_SOL=0.05
+```
+
+### Run
+
+```bash
+npm run dev                     # landing page + live agent demo
+npm test                        # unit tests
+npm run test:integration        # devnet round trip (needs AGACY_RPC_URL)
+npm run capture-proof           # re-record the on-chain evidence
 npm run verify-delegate-binding # re-verify delegate binding against a fresh devnet transfer
-npm run agent                  # run the autonomous agent against real devnet (needs LLM_API_KEY)
+npm run agent                   # run the autonomous agent against real devnet (needs LLM_API_KEY)
+npm run agent:mainnet           # same agent, mainnet swap capability enabled (needs the 4 vars above)
 ```
