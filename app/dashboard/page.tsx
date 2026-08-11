@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { address, type KeyPairSigner } from "@solana/kit";
-import type { AgentStep, AgentTask } from "../../agent/loop";
+import type { AgentTask } from "../../agent/loop";
 import type {
   AgentDraftDTO,
   AgentExecutionDTO,
   AgentOnboardingStep,
   SpendPolicyDTO,
 } from "../../server/dto/agent.dto";
+import type { AgentRunGraphEventDTO } from "../../server/dto/agent-run.dto";
 import type { DashboardSection } from "../../server/dto/dashboard.dto";
 import { toPublicView } from "../../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../../server/dto/wallet.dto";
@@ -22,10 +23,11 @@ import {
   type AttackStepDTO,
 } from "../../server/services/demo-scenario";
 import { AgentSetup } from "../AgentSetup";
+import { AgentExecutionGraph } from "../AgentExecutionGraph";
 import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
-import { runAgentOnChain } from "../../server/services/agent-run";
+import { createAgentRunGoalEvent, runAgentOnChain } from "../../server/services/agent-run";
 import {
   ATTACKS,
   runAttack,
@@ -113,6 +115,11 @@ const PROCUREMENT_TASKS: readonly AgentTask[] = [
 
 const INITIAL_BALANCE = 250_000_000n;
 
+const RUN_GOAL =
+  "Process the queued operating payments. Check the on-chain policy before every payment and stop anything outside the owner's limits.";
+
+const GOAL_GRAPH_EVENT = createAgentRunGoalEvent(RUN_GOAL);
+
 const DEFAULT_DRAFT: AgentDraftDTO = {
   name: "Ops agent",
   purpose: "subscriptions",
@@ -137,7 +144,7 @@ export default function DashboardPage() {
   const [onChainPolicy, setOnChainPolicy] = useState<OnChainPolicyStatusDTO | null>(null);
   const [onChainPolicyLoading, setOnChainPolicyLoading] = useState(false);
 
-  const [steps, setSteps] = useState<AgentStep[]>([]);
+  const [graphEvents, setGraphEvents] = useState<AgentRunGraphEventDTO[]>([GOAL_GRAPH_EVENT]);
   const [executed, setExecuted] = useState<AgentExecutionDTO[]>([]);
   const [running, setRunning] = useState(false);
   const [done, setDone] = useState(false);
@@ -160,7 +167,7 @@ export default function DashboardPage() {
 
   const reset = useCallback(() => {
     setRunError(null);
-    setSteps([]);
+    setGraphEvents([GOAL_GRAPH_EVENT]);
     setExecuted([]);
     setDone(false);
     setOwnerView(false);
@@ -336,38 +343,22 @@ export default function DashboardPage() {
         ownerWallet,
         policyAccount: address(provisionedPolicy.policyAccount),
         agentSigner,
+        goal: RUN_GOAL,
         tasks,
+        onGraphEvent: (event) => {
+          setGraphEvents((previous) => {
+            const existing = previous.findIndex((item) => item.authorized.id === event.authorized.id);
+            if (existing === -1) return [...previous, event];
+            return previous.map((item, index) => (index === existing ? event : item));
+          });
+        },
         onStep: ({ task, outcome }) => {
-          const next: AgentStep[] = [
-            { kind: "think", text: task.reasoning },
-            {
-              kind: "decide",
-              text: `Proposes sending ${formatTokens(task.amount)} to ${task.label}.`,
-              amount: task.amount,
-              recipient: task.recipient,
-            },
-          ];
-
           if (outcome.status === "authorized") {
-            next.push({
-              kind: "policy",
-              text: "Authorized on-chain by the policy program.",
-            });
-            next.push({
-              kind: "execute",
-              text: outcome.signature,
-              amount: task.amount,
-              recipient: task.recipient,
-            });
             setExecuted((prev) => [
               ...prev,
               { amount: task.amount, recipient: task.recipient, reasoning: task.reasoning },
             ]);
-          } else {
-            next.push({ kind: "refused", text: outcome.reason });
           }
-
-          setSteps((prev) => [...prev, ...next]);
         },
       });
     } catch (error) {
@@ -467,7 +458,12 @@ export default function DashboardPage() {
   const balance = INITIAL_BALANCE - spent;
   const authorizedTransactions = buildAuthorizedDemoHistory(executed, INITIAL_BALANCE);
   const publicTransactions = authorizedTransactions.map(toPublicView);
-  const currentTask = steps.at(-1)?.text ?? "Ready for a task";
+  const currentTask =
+    graphEvents.length > 1
+      ? graphEvents.at(-1)?.authorized.taskLabel ??
+        graphEvents.at(-1)?.authorized.detail ??
+        "Agent activity"
+      : "Ready for a task";
 
   return (
     <Dashboard
@@ -539,10 +535,10 @@ export default function DashboardPage() {
             <button className="primary" onClick={run} disabled={running}>
               {running ? "Agent running..." : done ? "Run again" : "Start agent"}
             </button>
-            <button onClick={reset} disabled={running || steps.length === 0}>
+            <button onClick={reset} disabled={running || graphEvents.length <= 1}>
               Reset
             </button>
-            <button onClick={() => setOwnerView(!ownerView)} disabled={executed.length === 0}>
+            <button onClick={() => setOwnerView(!ownerView)}>
               {ownerView ? "Hide owner view" : "View as owner"}
             </button>
             <button onClick={() => setShowAttackSim(!showAttackSim)}>
@@ -551,18 +547,22 @@ export default function DashboardPage() {
             {done && <button onClick={() => router.push("/proof")}>See on-chain proof</button>}
             <button onClick={() => setDashboardSection("overview")}>Back to overview</button>
             <span className="hint">
-              {steps.length === 0
+              {graphEvents.length <= 1
                 ? "Idle."
                 : `${executed.length} paid | ${formatTokens(balance)} USDC left`}
             </span>
           </div>
 
-          <div className="layout">
-            <AgentConsole steps={steps} running={running} />
-            <div className="panels">
-              <ExposedPanel executed={executed} balance={balance} />
-              <ConfidentialPanel executed={executed} ownerView={ownerView} balance={balance} />
-            </div>
+          <AgentExecutionGraph
+            publicEvents={graphEvents.map((event) => event.public)}
+            authorizedEvents={graphEvents.map((event) => event.authorized)}
+            ownerView={ownerView}
+            running={running}
+          />
+
+          <div className="panels">
+            <ExposedPanel executed={executed} balance={balance} />
+            <ConfidentialPanel executed={executed} ownerView={ownerView} balance={balance} />
           </div>
 
           {showAttackSim && (
@@ -596,49 +596,6 @@ export default function DashboardPage() {
         </div>
       ) : undefined}
     </Dashboard>
-  );
-}
-
-const STEP_LABEL: Record<AgentStep["kind"], string> = {
-  observe: "observes",
-  think: "reasons",
-  decide: "decides",
-  policy: "policy ok",
-  execute: "executes",
-  refused: "blocked",
-};
-
-function AgentConsole({ steps, running }: { steps: AgentStep[]; running: boolean }) {
-  return (
-    <section className="card console">
-      <div className="console-head">
-        <span className={running ? "dot live" : "dot"} />
-        AI agent
-      </div>
-      <div className="console-body">
-        {steps.length === 0 && <p className="empty">Press “Start agent”.</p>}
-        {steps.map((step, i) => (
-          <div className={`step step-${step.kind}`} key={i}>
-            <span className="step-kind">{STEP_LABEL[step.kind]}</span>
-            {/* An approval's text is its signature — rendered as a link so the
-                claim can be checked rather than taken. */}
-            <span className="step-text">
-              {step.kind === "execute" ? (
-                <a
-                  href={`https://explorer.solana.com/tx/${step.text}?cluster=devnet`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {step.text.slice(0, 24)}…
-                </a>
-              ) : (
-                step.text
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
   );
 }
 

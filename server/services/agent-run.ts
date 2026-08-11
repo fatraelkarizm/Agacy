@@ -4,6 +4,14 @@ import { sendInstructionsWithSigner } from "../data/solana-client";
 import type { SolanaClient } from "../data/solana-client";
 import { getOwnerTransactionSigner } from "./wallet-connection";
 import type { WalletConnectionDTO } from "../dto/wallet.dto";
+import type {
+  AgentRunGraphEventDTO,
+  AgentRunOutcomeDTO,
+  AgentRunStepDTO,
+  AgentRunTaskDTO,
+  AuthorizedAgentRunEventDTO,
+  PublicAgentRunEventDTO,
+} from "../dto/agent-run.dto";
 
 /**
  * Running an agent against the real policy account on devnet.
@@ -44,36 +52,59 @@ const PROGRAM_ERRORS: Record<number, string> = {
   6019: "This policy uses confidential limits and needs the confidential path.",
 };
 
-export interface AgentRunTask {
-  readonly label: string;
-  readonly reasoning: string;
-  readonly amount: bigint;
-  readonly recipient: string;
-}
-
-export type AgentRunOutcome =
-  | { readonly status: "authorized"; readonly signature: string }
-  | { readonly status: "refused"; readonly reason: string };
-
-export interface AgentRunStepDTO {
-  readonly task: AgentRunTask;
-  readonly outcome: AgentRunOutcome;
-}
-
 export interface RunAgentOnChainParams {
   readonly client: SolanaClient;
   readonly ownerWallet: WalletConnectionDTO;
   readonly policyAccount: Address;
   /** Kept in memory for the session only — see agent-provisioning.ts. */
   readonly agentSigner: TransactionSigner;
-  readonly tasks: readonly AgentRunTask[];
+  readonly goal: string;
+  readonly tasks: readonly AgentRunTaskDTO[];
   readonly onStep: (step: AgentRunStepDTO) => void | Promise<void>;
+  readonly onGraphEvent?: (event: AgentRunGraphEventDTO) => void | Promise<void>;
 }
 
 export async function runAgentOnChain(params: RunAgentOnChainParams): Promise<void> {
   const ownerSigner = getOwnerTransactionSigner(params.ownerWallet);
 
-  for (const task of params.tasks) {
+  await emitGraphEvent(params, {
+    id: "goal",
+    taskIndex: -1,
+    kind: "goal",
+    status: "completed",
+    detail: params.goal,
+  });
+
+  for (const [taskIndex, task] of params.tasks.entries()) {
+    await emitGraphEvent(params, {
+      id: `${taskIndex}-observe`,
+      taskIndex,
+      kind: "observe",
+      status: "completed",
+      taskLabel: task.label,
+      detail: task.reasoning,
+    });
+    await emitGraphEvent(params, {
+      id: `${taskIndex}-decide`,
+      taskIndex,
+      kind: "decide",
+      status: "completed",
+      taskLabel: task.label,
+      detail: "Proposed a confidential payment.",
+      amount: task.amount,
+      recipient: task.recipient,
+    });
+    await emitGraphEvent(params, {
+      id: `${taskIndex}-policy`,
+      taskIndex,
+      kind: "policy",
+      status: "running",
+      taskLabel: task.label,
+      detail: "Waiting for the on-chain policy program.",
+      amount: task.amount,
+      recipient: task.recipient,
+    });
+
     const outcome = await authorizeOnChain({
       client: params.client,
       ownerSigner,
@@ -81,8 +112,81 @@ export async function runAgentOnChain(params: RunAgentOnChainParams): Promise<vo
       agentSigner: params.agentSigner,
       amount: task.amount,
     });
+
+    await emitGraphEvent(params, {
+      id: `${taskIndex}-policy`,
+      taskIndex,
+      kind: "policy",
+      status: outcome.status === "authorized" ? "approved" : "rejected",
+      taskLabel: task.label,
+      detail:
+        outcome.status === "authorized"
+          ? "Approved by the deployed policy program."
+          : outcome.reason,
+      amount: task.amount,
+      recipient: task.recipient,
+    });
+
+    await emitGraphEvent(
+      params,
+      outcome.status === "authorized"
+        ? {
+            id: `${taskIndex}-execute`,
+            taskIndex,
+            kind: "execute",
+            status: "confirmed",
+            taskLabel: task.label,
+            detail: "Authorization confirmed on Solana devnet.",
+            amount: task.amount,
+            recipient: task.recipient,
+            signature: outcome.signature,
+          }
+        : {
+            id: `${taskIndex}-refused`,
+            taskIndex,
+            kind: "refused",
+            status: "rejected",
+            taskLabel: task.label,
+            detail: outcome.reason,
+            amount: task.amount,
+            recipient: task.recipient,
+          },
+    );
     await params.onStep({ task, outcome });
   }
+}
+
+async function emitGraphEvent(
+  params: RunAgentOnChainParams,
+  authorized: AuthorizedAgentRunEventDTO,
+): Promise<void> {
+  await params.onGraphEvent?.({
+    authorized,
+    public: toPublicAgentRunEvent(authorized),
+  });
+}
+
+export function toPublicAgentRunEvent(
+  event: AuthorizedAgentRunEventDTO,
+): PublicAgentRunEventDTO {
+  return {
+    id: event.id,
+    taskIndex: event.taskIndex,
+    kind: event.kind,
+    status: event.status,
+    ...(event.signature === undefined ? {} : { signature: event.signature }),
+  };
+}
+
+export function createAgentRunGoalEvent(goal: string): AgentRunGraphEventDTO {
+  const authorized: AuthorizedAgentRunEventDTO = {
+    id: "goal",
+    taskIndex: -1,
+    kind: "goal",
+    status: "queued",
+    detail: goal,
+  };
+  return { authorized, public: toPublicAgentRunEvent(authorized) };
 }
 
 async function authorizeOnChain(params: {
@@ -91,7 +195,7 @@ async function authorizeOnChain(params: {
   policyAccount: Address;
   agentSigner: TransactionSigner;
   amount: bigint;
-}): Promise<AgentRunOutcome> {
+}): Promise<AgentRunOutcomeDTO> {
   const instruction = buildAuthorizeSpendV2Instruction({
     policyAccount: params.policyAccount,
     agent: params.agentSigner,
