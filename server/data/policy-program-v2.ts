@@ -51,6 +51,7 @@ const SYSTEM_PROGRAM_ID = address("11111111111111111111111111111111");
  * rather than trusted.
  */
 const IX_INITIALIZE = new Uint8Array([175, 175, 109, 31, 13, 152, 155, 237]);
+const IX_INITIALIZE_CONFIDENTIAL = new Uint8Array([228, 135, 57, 183, 32, 156, 70, 80]);
 const IX_UPDATE_LIMITS = new Uint8Array([89, 37, 137, 60, 75, 70, 48, 194]);
 const IX_AUTHORIZE = new Uint8Array([173, 193, 102, 210, 219, 137, 113, 120]);
 const IX_AUTHORIZE_AND_INVOKE = new Uint8Array([225, 250, 173, 251, 78, 28, 228, 203]);
@@ -125,6 +126,48 @@ export function buildInitializePolicyV2Instruction(params: InitializePolicyV2Par
   view.setBigUint64(40, params.maxPerTransfer, true);
   view.setBigUint64(48, params.maxPerPeriod, true);
   view.setBigInt64(56, params.periodSeconds, true);
+
+  return {
+    programAddress: POLICY_V2_PROGRAM_ID,
+    accounts: [
+      { address: params.policyAccount, role: WRITABLE },
+      { address: params.owner.address, role: WRITABLE_SIGNER, signer: params.owner },
+      { address: SYSTEM_PROGRAM_ID, role: READONLY },
+    ],
+    data,
+  };
+}
+
+export interface InitializeConfidentialPolicyV2Params {
+  readonly policyAccount: Address;
+  readonly owner: TransactionSigner;
+  readonly agent: Address;
+  readonly limitPubkey: Uint8Array;
+  readonly maxPerTransferCt: Uint8Array;
+  readonly maxPerPeriodCt: Uint8Array;
+  readonly periodSeconds: bigint;
+}
+
+/**
+ * Creates a policy with encrypted limits in its first on-chain state. This is
+ * the only initialization path suitable for a private policy: initializing
+ * plaintext first would leave the limits in immutable transaction history.
+ */
+export function buildInitializeConfidentialPolicyV2Instruction(
+  params: InitializeConfidentialPolicyV2Params,
+) {
+  requireLength(params.limitPubkey, 32, "limitPubkey");
+  requireLength(params.maxPerTransferCt, 64, "maxPerTransferCt");
+  requireLength(params.maxPerPeriodCt, 64, "maxPerPeriodCt");
+
+  const data = new Uint8Array(8 + 32 + 32 + 64 + 64 + 8);
+  const view = new DataView(data.buffer);
+  data.set(IX_INITIALIZE_CONFIDENTIAL, 0);
+  data.set(addressEncoder.encode(params.agent), 8);
+  data.set(params.limitPubkey, 40);
+  data.set(params.maxPerTransferCt, 72);
+  data.set(params.maxPerPeriodCt, 136);
+  view.setBigInt64(200, params.periodSeconds, true);
 
   return {
     programAddress: POLICY_V2_PROGRAM_ID,

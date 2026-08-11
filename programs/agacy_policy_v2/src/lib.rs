@@ -69,6 +69,27 @@ pub mod agacy_policy_v2 {
         )
     }
 
+    /// Creates a confidential policy atomically. Unlike `initialize` followed
+    /// by `set_confidential_limits`, no transaction or account state ever
+    /// contains the plaintext limits.
+    pub fn initialize_confidential(
+        ctx: Context<Initialize>,
+        agent: Pubkey,
+        limit_pubkey: [u8; 32],
+        max_per_transfer_ct: [u8; 64],
+        max_per_period_ct: [u8; 64],
+        period_seconds: i64,
+    ) -> Result<()> {
+        crate::instructions::initialize::handle_initialize_confidential(
+            ctx,
+            agent,
+            limit_pubkey,
+            max_per_transfer_ct,
+            max_per_period_ct,
+            period_seconds,
+        )
+    }
+
     pub fn update_limits(
         ctx: Context<UpdateLimits>,
         max_per_transfer: u64,

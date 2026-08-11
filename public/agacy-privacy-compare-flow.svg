@@ -1,0 +1,122 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">Agacy privacy comparison flow</title>
+  <desc id="desc">Side-by-side comparison of an ordinary public AI agent wallet and Agacy's confidential payment flow, including an honest metadata boundary.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#080711"/>
+      <stop offset="1" stop-color="#05050b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="20%" r="70%">
+      <stop offset="0" stop-color="#7259ee" stop-opacity=".24"/>
+      <stop offset="1" stop-color="#7259ee" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="privateCard" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#17132a"/>
+      <stop offset="1" stop-color="#0e1720"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000" flood-opacity=".38"/>
+    </filter>
+    <pattern id="grid" width="72" height="72" patternUnits="userSpaceOnUse">
+      <path d="M72 0H0V72" fill="none" stroke="#9580ff" stroke-opacity=".045"/>
+    </pattern>
+    <marker id="arrowRed" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#ff5c7a"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto">
+      <path d="M0 0L10 5L0 10Z" fill="#4ade9b"/>
+    </marker>
+    <style>
+      .sans{font-family:Inter,Segoe UI,Arial,sans-serif}.mono{font-family:"Cascadia Code",Consolas,monospace}
+      .eyebrow{font-size:14px;font-weight:700;letter-spacing:2.4px}.headline{font-size:48px;font-weight:700;letter-spacing:-1.8px}
+      .columnTitle{font-size:25px;font-weight:700}.body{font-size:17px}.small{font-size:14px}.label{font-size:12px;font-weight:700;letter-spacing:1.5px}
+      .card{fill:#110f1e;stroke:#9080f6;stroke-opacity:.18}.node{fill:#151225;stroke:#9080f6;stroke-opacity:.24}
+    </style>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+
+  <g class="sans">
+    <g transform="translate(70 54)">
+      <rect width="30" height="30" rx="8" fill="#7259ee"/>
+      <path d="M8 19L15 8l7 11-7-4z" fill="#f3f1fa"/>
+      <text x="44" y="23" fill="#f3f1fa" font-size="22" font-weight="700">Agacy</text>
+    </g>
+    <text x="70" y="130" class="eyebrow" fill="#9580ff">THE SAME AGENT PAYMENT &#8212; TWO PUBLIC OUTCOMES</text>
+    <text x="70" y="185" class="headline" fill="#f3f1fa">Public by default.</text>
+    <text x="438" y="185" class="headline" fill="#4ade9b">Confidential by design.</text>
+
+    <!-- Left column -->
+    <g filter="url(#shadow)">
+      <rect x="70" y="230" width="700" height="500" rx="24" class="card"/>
+      <rect x="70" y="230" width="700" height="7" rx="4" fill="#ff5c7a"/>
+    </g>
+    <text x="110" y="284" class="label" fill="#ff5c7a">WITHOUT AGACY</text>
+    <text x="110" y="322" class="columnTitle" fill="#f3f1fa">Ordinary AI agent wallet</text>
+
+    <rect x="110" y="358" width="185" height="82" rx="14" class="node"/>
+    <text x="132" y="389" class="small" fill="#827d92">AI AGENT</text>
+    <text x="132" y="417" class="body" fill="#f3f1fa" font-weight="650">Send supplier payment</text>
+    <path d="M295 399H352" stroke="#ff5c7a" stroke-width="2" marker-end="url(#arrowRed)"/>
+
+    <rect x="365" y="358" width="170" height="82" rx="14" class="node"/>
+    <text x="387" y="389" class="small" fill="#827d92">ORDINARY SPL</text>
+    <text x="387" y="417" class="body" fill="#f3f1fa" font-weight="650">Public transfer</text>
+    <path d="M535 399H592" stroke="#ff5c7a" stroke-width="2" marker-end="url(#arrowRed)"/>
+
+    <rect x="605" y="358" width="125" height="82" rx="14" fill="#28131e" stroke="#ff5c7a" stroke-opacity=".45"/>
+    <text x="629" y="389" class="small" fill="#ff9caf">SOLANA</text>
+    <text x="629" y="417" class="body" fill="#f3f1fa" font-weight="650">Explorer</text>
+
+    <text x="110" y="488" class="label" fill="#827d92">WHAT A STRANGER READS</text>
+    <g transform="translate(110 514)">
+      <rect width="620" height="48" rx="10" fill="#ff5c7a" fill-opacity=".08" stroke="#ff5c7a" stroke-opacity=".2"/>
+      <circle cx="24" cy="24" r="6" fill="#ff5c7a"/><text x="44" y="30" class="body mono" fill="#ffb0c1">amount: 12.5 USDC</text>
+      <rect y="60" width="620" height="48" rx="10" fill="#ff5c7a" fill-opacity=".08" stroke="#ff5c7a" stroke-opacity=".2"/>
+      <circle cx="24" cy="84" r="6" fill="#ff5c7a"/><text x="44" y="90" class="body mono" fill="#ffb0c1">balance: 87.5 USDC</text>
+      <rect y="120" width="620" height="48" rx="10" fill="#ff5c7a" fill-opacity=".08" stroke="#ff5c7a" stroke-opacity=".2"/>
+      <circle cx="24" cy="144" r="6" fill="#ff5c7a"/><text x="44" y="150" class="body" fill="#ffb0c1">Supplier relationship + spending pattern</text>
+    </g>
+
+    <!-- Right column -->
+    <g filter="url(#shadow)">
+      <rect x="830" y="230" width="700" height="500" rx="24" fill="url(#privateCard)" stroke="#4ade9b" stroke-opacity=".24"/>
+      <rect x="830" y="230" width="700" height="7" rx="4" fill="#4ade9b"/>
+    </g>
+    <text x="870" y="284" class="label" fill="#4ade9b">WITH AGACY &#8212; DEVNET PROVEN 7/7</text>
+    <text x="870" y="322" class="columnTitle" fill="#f3f1fa">Confidential values, bounded autonomy</text>
+
+    <rect x="870" y="358" width="150" height="82" rx="14" class="node"/>
+    <text x="892" y="389" class="small" fill="#827d92">AI AGENT</text>
+    <text x="892" y="417" class="body" fill="#f3f1fa" font-weight="650">Proposes</text>
+    <path d="M1020 399H1051" stroke="#4ade9b" stroke-width="2" marker-end="url(#arrowGreen)"/>
+
+    <rect x="1063" y="358" width="175" height="82" rx="14" fill="#17142d" stroke="#9580ff" stroke-opacity=".46"/>
+    <text x="1085" y="389" class="small" fill="#9580ff">POLICY PROGRAM</text>
+    <text x="1085" y="417" class="body" fill="#f3f1fa" font-weight="650">Allows / rejects</text>
+    <path d="M1238 399H1269" stroke="#4ade9b" stroke-width="2" marker-end="url(#arrowGreen)"/>
+
+    <rect x="1281" y="358" width="209" height="82" rx="14" fill="#10251e" stroke="#4ade9b" stroke-opacity=".45"/>
+    <text x="1303" y="389" class="small" fill="#4ade9b">TOKEN-2022</text>
+    <text x="1303" y="417" class="body" fill="#f3f1fa" font-weight="650">Confidential payment</text>
+
+    <text x="870" y="488" class="label" fill="#827d92">PUBLIC OBSERVER</text>
+    <g transform="translate(870 514)">
+      <rect width="620" height="48" rx="10" fill="#4ade9b" fill-opacity=".07" stroke="#4ade9b" stroke-opacity=".2"/>
+      <circle cx="24" cy="24" r="6" fill="#4ade9b"/><text x="44" y="30" class="body mono" fill="#a5f0cc">amount: encrypted</text>
+      <rect y="60" width="620" height="48" rx="10" fill="#4ade9b" fill-opacity=".07" stroke="#4ade9b" stroke-opacity=".2"/>
+      <circle cx="24" cy="84" r="6" fill="#4ade9b"/><text x="44" y="90" class="body mono" fill="#a5f0cc">confidential balance: encrypted</text>
+      <rect y="120" width="620" height="48" rx="10" fill="#7259ee" fill-opacity=".08" stroke="#9580ff" stroke-opacity=".22"/>
+      <circle cx="24" cy="144" r="6" fill="#9580ff"/><text x="44" y="150" class="body mono" fill="#c5bbff">policy limits: encrypted from genesis</text>
+    </g>
+
+    <!-- Honest boundary -->
+    <rect x="70" y="760" width="1460" height="96" rx="18" fill="#0d0c18" stroke="#9580ff" stroke-opacity=".22"/>
+    <text x="100" y="795" class="label" fill="#9580ff">HONEST PRIVACY BOUNDARY</text>
+    <text x="100" y="829" class="body" fill="#f3f1fa" font-weight="650">Hidden: amount, balance, reasoning, policy limit. Owner retains audit access.</text>
+    <text x="815" y="829" class="body" fill="#aca8bd">Still public: accounts, mint, fee payer, timing, transaction graph.</text>
+    <text x="1494" y="802" class="mono small" text-anchor="end" fill="#827d92">CONFIDENTIAL &#8800; UNTRACEABLE</text>
+  </g>
+</svg>

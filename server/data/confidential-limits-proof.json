@@ -1,33 +1,34 @@
 {
-  "capturedAt": "2026-08-03T10:36:30.149Z",
+  "capturedAt": "2026-08-11T13:28:12.594Z",
   "cluster": "devnet",
   "programId": "9sYKkYh1GTKY2whkGPGXuG1VKiYqfiwyjVcpQbYtHtwW",
   "ownerAddress": "5HYaEvHzKZfw1VhWo9zz6SxqWgy4f7XUBWZFnBamJQC5",
-  "agentAddress": "7qNmBZ1FpLbALBo8xdgvDv7HsHiyxoiuTtSvZBvyUPFY",
-  "policyAccount": "Fji5XJVuy31wv952agsDiDaQPFvKJxFukvP9amux2Ucc",
+  "agentAddress": "CnKVnn63oSsLcCocFME9MZs2PpDuTWRhjtRU1YSej9AX",
+  "policyAccount": "8D4NwsXn9oL82ViTyqzkz4oQUS6Uqp5HKPSnavHsvzRB",
+  "initializeSignature": "3CNDJUiBnhAJCvCW2uxr6n6kjDeoBKXkzag6Uf6MmPiJ1C1QDJ6HKh4N2T7GjYVSUeP5sERst7d2s4gJyNNbYiT3",
   "limits": {
     "maxPerTransfer": "20000000",
     "maxPerPeriod": "50000000",
     "note": "Recorded here for the reader only. On-chain these exist solely as ciphertexts."
   },
-  "authorizeSignature": "P9GHy7SVdHZCwjfi596V1A8nGquRTAZUA6N8n7stSRYuz66gtXtBL6mkxBV3ZE1aC2two2s9XiGftenUNpNNwaw",
+  "authorizeSignature": "5GXxua1KMWZ5um4bazvMZaiQT2T7A2iTQR6uK5phtHnAx3EP2dwHCXsjjL4e4QaBfuTiipVuvwoJ7jYgstkE4jho",
   "checks": [
     {
       "step": "the policy now carries encrypted limits instead of readable ones",
       "expected": "confidential limits present, under the owner's ElGamal key",
-      "observed": "present (pubkey ec9713764d23…)",
+      "observed": "present (pubkey a672af90f26f…)",
       "ok": true
     },
     {
-      "step": "the limit value cannot be read out of the account's confidential fields",
-      "expected": "20000000 not present in the ciphertext region",
-      "observed": "not found — encrypted",
+      "step": "the limit never appears in the policy account or confirmed initialize transaction",
+      "expected": "20000000 absent from all account bytes and serialized transaction bytes",
+      "observed": "not found — confidential from genesis",
       "ok": true
     },
     {
       "step": "an in-policy spend is authorized against limits the program cannot read",
       "expected": "authorized, and the encrypted period total moves off zero",
-      "observed": "authorized (P9GHy7SVdHZCwjfi…), spent-total changed: true",
+      "observed": "authorized (5GXxua1KMWZ5um4b…), spent-total changed: true",
       "ok": true
     },
     {

@@ -9,6 +9,7 @@ import {
   buildAuthorizeAndInvokeInstruction,
   buildAuthorizeSpendV2Instruction,
   buildCustodyMaintenanceInstruction,
+  buildInitializeConfidentialPolicyV2Instruction,
   buildInitializePolicyV2Instruction,
   buildReleaseCustodyInstruction,
   buildUpdateLimitsV2Instruction,
@@ -44,6 +45,15 @@ describe("anchor discriminators", () => {
       agent: AGENT,
       maxPerTransfer: 1n,
       maxPerPeriod: 1n,
+      periodSeconds: 1n,
+    }).data],
+    ["initialize_confidential", buildInitializeConfidentialPolicyV2Instruction({
+      policyAccount: POLICY,
+      owner: ownerSigner,
+      agent: AGENT,
+      limitPubkey: new Uint8Array(32).fill(1),
+      maxPerTransferCt: new Uint8Array(64).fill(2),
+      maxPerPeriodCt: new Uint8Array(64).fill(3),
       periodSeconds: 1n,
     }).data],
     ["update_limits", buildUpdateLimitsV2Instruction({
@@ -121,6 +131,45 @@ describe("initialize", () => {
   it("makes the owner a writable signer, since Anchor's init charges them rent", () => {
     const owner = ix.accounts.find((account) => account.address === OWNER);
     expect(owner?.role).toBe(3);
+  });
+});
+
+describe("initialize_confidential", () => {
+  const limitPubkey = new Uint8Array(32).fill(1);
+  const maxPerTransferCt = new Uint8Array(64).fill(2);
+  const maxPerPeriodCt = new Uint8Array(64).fill(3);
+  const ix = buildInitializeConfidentialPolicyV2Instruction({
+    policyAccount: POLICY,
+    owner: ownerSigner,
+    agent: AGENT,
+    limitPubkey,
+    maxPerTransferCt,
+    maxPerPeriodCt,
+    periodSeconds: 86_400n,
+  });
+
+  it("contains ciphertexts and no plaintext limit arguments", () => {
+    expect([...ix.data.slice(8, 40)]).toEqual([...addressEncoder.encode(AGENT)]);
+    expect([...ix.data.slice(40, 72)]).toEqual([...limitPubkey]);
+    expect([...ix.data.slice(72, 136)]).toEqual([...maxPerTransferCt]);
+    expect([...ix.data.slice(136, 200)]).toEqual([...maxPerPeriodCt]);
+    expect(new DataView(ix.data.buffer).getBigInt64(200, true)).toBe(86_400n);
+
+    const plaintextLimit = new Uint8Array(8);
+    new DataView(plaintextLimit.buffer).setBigUint64(0, 20_000_000n, true);
+    expect(Buffer.from(ix.data).includes(Buffer.from(plaintextLimit))).toBe(false);
+  });
+
+  it("rejects malformed ciphertexts before a transaction is built", () => {
+    expect(() => buildInitializeConfidentialPolicyV2Instruction({
+      policyAccount: POLICY,
+      owner: ownerSigner,
+      agent: AGENT,
+      limitPubkey,
+      maxPerTransferCt: new Uint8Array(63),
+      maxPerPeriodCt,
+      periodSeconds: 86_400n,
+    })).toThrow(/maxPerTransferCt must be 64 bytes/);
   });
 });
 

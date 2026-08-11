@@ -42,6 +42,11 @@ pub fn handle_set_confidential_limits(
     require!(limit_pubkey != [0u8; 32], PolicyError::ProofUnderWrongKey);
 
     let policy = &mut ctx.accounts.policy;
+    // Clear the legacy fields so the current account state does not retain a
+    // readable copy. This cannot erase the historical initialize transaction;
+    // new private policies must use `initialize_confidential` for that.
+    policy.max_per_transfer = 0;
+    policy.max_per_period = 0;
     policy.limit_pubkey = limit_pubkey;
     policy.max_per_transfer_ct = max_per_transfer_ct;
     policy.max_per_period_ct = max_per_period_ct;

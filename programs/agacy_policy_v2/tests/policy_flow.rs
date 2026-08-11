@@ -20,6 +20,9 @@ use {
 const MAX_PER_TRANSFER: u64 = 20_000_000;
 const MAX_PER_PERIOD: u64 = 50_000_000;
 const PERIOD_SECONDS: i64 = 86_400;
+const LIMIT_PUBKEY: [u8; 32] = [7; 32];
+const MAX_PER_TRANSFER_CT: [u8; 64] = [8; 64];
+const MAX_PER_PERIOD_CT: [u8; 64] = [9; 64];
 
 struct Fixture {
     svm: LiteSVM,
@@ -80,6 +83,58 @@ fn setup() -> Fixture {
     }
 }
 
+fn setup_confidential() -> Fixture {
+    let program_id = agacy_policy_v2::id();
+    let owner = Keypair::new();
+    let agent = Keypair::new();
+    let policy = Pubkey::find_program_address(
+        &[
+            agacy_policy_v2::constants::POLICY_SEED,
+            owner.pubkey().as_ref(),
+            agent.pubkey().as_ref(),
+        ],
+        &program_id,
+    )
+    .0;
+
+    let mut svm = LiteSVM::new();
+    let bytes = include_bytes!(concat!(
+        env!("CARGO_TARGET_TMPDIR"),
+        "/../deploy/agacy_policy_v2.so"
+    ));
+    svm.add_program(program_id, bytes).unwrap();
+    svm.airdrop(&owner.pubkey(), 1_000_000_000).unwrap();
+
+    let ix = Instruction::new_with_bytes(
+        program_id,
+        &agacy_policy_v2::instruction::InitializeConfidential {
+            agent: agent.pubkey(),
+            limit_pubkey: LIMIT_PUBKEY,
+            max_per_transfer_ct: MAX_PER_TRANSFER_CT,
+            max_per_period_ct: MAX_PER_PERIOD_CT,
+            period_seconds: PERIOD_SECONDS,
+        }
+        .data(),
+        agacy_policy_v2::accounts::Initialize {
+            policy,
+            owner: owner.pubkey(),
+            system_program: system_program::ID,
+        }
+        .to_account_metas(None),
+    );
+    let blockhash = svm.latest_blockhash();
+    let msg = Message::new_with_blockhash(&[ix], Some(&owner.pubkey()), &blockhash);
+    let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[&owner]).unwrap();
+    svm.send_transaction(tx).unwrap();
+
+    Fixture {
+        svm,
+        owner,
+        agent,
+        policy,
+    }
+}
+
 fn read_policy(svm: &LiteSVM, policy: &Pubkey) -> agacy_policy_v2::state::Policy {
     let account = svm.get_account(policy).unwrap();
     let mut data: &[u8] = &account.data;
@@ -117,6 +172,47 @@ fn initializes_with_the_owner_and_agent_recorded() {
     assert_eq!(state.agent, fx.agent.pubkey());
     assert_eq!(state.max_per_transfer, MAX_PER_TRANSFER);
     assert_eq!(state.spent_in_period, 0);
+}
+
+#[test]
+fn confidential_initialization_never_writes_plaintext_limits() {
+    let fx = setup_confidential();
+    let state = read_policy(&fx.svm, &fx.policy);
+    assert_eq!(state.owner, fx.owner.pubkey());
+    assert_eq!(state.agent, fx.agent.pubkey());
+    assert_eq!(state.max_per_transfer, 0);
+    assert_eq!(state.max_per_period, 0);
+    assert_eq!(state.spent_in_period, 0);
+    assert_eq!(state.limit_pubkey, LIMIT_PUBKEY);
+    assert_eq!(state.max_per_transfer_ct, MAX_PER_TRANSFER_CT);
+    assert_eq!(state.max_per_period_ct, MAX_PER_PERIOD_CT);
+}
+
+#[test]
+fn plaintext_updates_cannot_repopulate_a_confidential_policy() {
+    let mut fx = setup_confidential();
+    let ix = Instruction::new_with_bytes(
+        agacy_policy_v2::id(),
+        &agacy_policy_v2::instruction::UpdateLimits {
+            max_per_transfer: MAX_PER_TRANSFER,
+            max_per_period: MAX_PER_PERIOD,
+        }
+        .data(),
+        agacy_policy_v2::accounts::UpdateLimits {
+            policy: fx.policy,
+            owner: fx.owner.pubkey(),
+        }
+        .to_account_metas(None),
+    );
+    fx.svm.expire_blockhash();
+    let blockhash = fx.svm.latest_blockhash();
+    let msg = Message::new_with_blockhash(&[ix], Some(&fx.owner.pubkey()), &blockhash);
+    let tx = VersionedTransaction::try_new(VersionedMessage::Legacy(msg), &[&fx.owner]).unwrap();
+    assert!(fx.svm.send_transaction(tx).is_err());
+
+    let state = read_policy(&fx.svm, &fx.policy);
+    assert_eq!(state.max_per_transfer, 0);
+    assert_eq!(state.max_per_period, 0);
 }
 
 #[test]

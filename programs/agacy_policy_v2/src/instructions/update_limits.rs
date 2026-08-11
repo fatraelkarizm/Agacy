@@ -18,6 +18,10 @@ pub fn handle_update_limits(
     max_per_period: u64,
 ) -> Result<()> {
     let policy = &mut ctx.accounts.policy;
+    require!(
+        !policy.has_confidential_limits(),
+        PolicyError::ConfidentialLimitsRequired
+    );
     policy.max_per_transfer = max_per_transfer;
     policy.max_per_period = max_per_period;
     Ok(())

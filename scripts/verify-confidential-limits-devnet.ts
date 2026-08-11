@@ -13,8 +13,7 @@ import { sendInstructions } from "../server/data/confidential-mint.js";
 import {
   buildAuthorizeConfidentialInstruction,
   buildAuthorizeSpendV2Instruction,
-  buildInitializePolicyV2Instruction,
-  buildSetConfidentialLimitsInstruction,
+  buildInitializeConfidentialPolicyV2Instruction,
   derivePolicyAddress,
   fetchPolicyV2Account,
   POLICY_V2_PROGRAM_ID,
@@ -128,31 +127,31 @@ async function main(): Promise<void> {
   console.log("agent:", agent.address, "\n");
 
   const policyAccount = await derivePolicyAddress(payer.address, agent.address);
-  await sendInstructions(client, payer, [
-    buildInitializePolicyV2Instruction({
-      policyAccount,
-      owner: payer,
-      agent: agent.address,
-      maxPerTransfer: MAX_PER_TRANSFER,
-      maxPerPeriod: MAX_PER_PERIOD,
-      periodSeconds: PERIOD_SECONDS,
-    }),
-  ]);
-  await pause();
-
-  // --- 1. switch the policy to encrypted limits ---------------------------
   const maxPerTransferCt = encryptLimit(limitKeys, MAX_PER_TRANSFER);
   const maxPerPeriodCt = encryptLimit(limitKeys, MAX_PER_PERIOD);
-  await sendInstructions(client, payer, [
-    buildSetConfidentialLimitsInstruction({
-      policyAccount,
-      owner: payer,
-      limitPubkey,
-      maxPerTransferCt,
-      maxPerPeriodCt,
-    }),
-  ]);
+  const initializeInstruction = buildInitializeConfidentialPolicyV2Instruction({
+    policyAccount,
+    owner: payer,
+    agent: agent.address,
+    limitPubkey,
+    maxPerTransferCt,
+    maxPerPeriodCt,
+    periodSeconds: PERIOD_SECONDS,
+  });
+  const initializeSignature = await sendInstructions(client, payer, [initializeInstruction]);
   await pause();
+
+  const initializeTransaction = await client.rpc
+    .getTransaction(initializeSignature as never, {
+      commitment: "confirmed",
+      encoding: "base64",
+      maxSupportedTransactionVersion: 0,
+    })
+    .send();
+  const initializeTransactionBytes = Buffer.from(
+    (initializeTransaction as { transaction: [string, string] }).transaction[0],
+    "base64",
+  );
 
   const stored = await fetchPolicyV2Account(client, policyAccount);
   record(
@@ -174,12 +173,15 @@ async function main(): Promise<void> {
   const accountBytes = Buffer.from(rawAccount.value?.data[0] ?? "", "base64");
   const limitLittleEndian = Buffer.alloc(8);
   limitLittleEndian.writeBigUInt64LE(MAX_PER_TRANSFER);
-  const foundInCiphertextRegion = accountBytes.subarray(145).includes(limitLittleEndian);
+  const foundInAccount = accountBytes.includes(limitLittleEndian);
+  const foundInInitializeTransaction = initializeTransactionBytes.includes(limitLittleEndian);
   record(
-    "the limit value cannot be read out of the account's confidential fields",
-    "20000000 not present in the ciphertext region",
-    foundInCiphertextRegion ? "FOUND IN PLAINTEXT" : "not found — encrypted",
-    !foundInCiphertextRegion,
+    "the limit never appears in the policy account or confirmed initialize transaction",
+    "20000000 absent from all account bytes and serialized transaction bytes",
+    foundInAccount || foundInInitializeTransaction
+      ? `FOUND IN PLAINTEXT (${foundInAccount ? "account" : "transaction"})`
+      : "not found — confidential from genesis",
+    !foundInAccount && !foundInInitializeTransaction,
   );
 
   // --- 3. an in-policy spend is authorized --------------------------------
@@ -334,6 +336,7 @@ async function main(): Promise<void> {
     ownerAddress: payer.address,
     agentAddress: agent.address,
     policyAccount,
+    initializeSignature,
     limits: {
       maxPerTransfer: MAX_PER_TRANSFER.toString(),
       maxPerPeriod: MAX_PER_PERIOD.toString(),
