@@ -1163,6 +1163,195 @@ button.primary:hover:not(:disabled) {
 
 .step-refused .step-kind, .step-refused .step-text { color: var(--exposed); }
 
+/* ---------- full-screen agent canvas ---------- */
+
+.agent-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #060608;
+  color: #f4f2fa;
+  cursor: crosshair;
+  user-select: none;
+}
+
+.agent-canvas-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.agent-canvas-edge { stroke: rgba(210, 206, 222, 0.28); stroke-width: 0.18; vector-effect: non-scaling-stroke; }
+.agent-canvas-edge-running { stroke: rgba(153, 127, 255, 0.9); stroke-width: 0.32; animation: agent-edge-breathe 1.1s ease-in-out infinite; }
+.agent-canvas-edge-blocked { stroke: rgba(255, 92, 122, 0.72); }
+
+.agent-canvas-core {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 2px solid #9a7dff;
+  border-radius: 50%;
+  background: #0d0c10;
+  color: #f7f4ff;
+  font-size: 0.83rem;
+  font-weight: 560;
+  letter-spacing: -0.02em;
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.46);
+}
+
+.agent-canvas-core:hover,
+.agent-canvas-core.selected { background: #121017; border-color: #c6b8ff; }
+.agent-canvas-core.running { animation: agent-core-breathe 1.25s ease-in-out infinite; }
+
+.agent-canvas-node {
+  position: absolute;
+  left: var(--node-x);
+  top: var(--node-y);
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  overflow: visible;
+  animation: agent-node-arrive 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.agent-canvas-node:hover { background: transparent; transform: translate(-50%, -50%) scale(1.08); }
+.agent-canvas-node-dot {
+  display: block;
+  width: max(6px, calc(15px - var(--node-depth) * 2px));
+  height: max(6px, calc(15px - var(--node-depth) * 2px));
+  border: 1px solid rgba(240, 237, 248, 0.72);
+  border-radius: 50%;
+  background: #8e8998;
+  box-shadow: 0 0 0 2px rgba(6, 6, 8, 0.9);
+}
+
+.agent-canvas-node-goal .agent-canvas-node-dot,
+.agent-canvas-node-policy .agent-canvas-node-dot { border-color: #a68cff; background: #6f4be0; }
+.agent-canvas-node-tool .agent-canvas-node-dot { background: #d4d0dd; }
+.agent-canvas-node-complete .agent-canvas-node-dot,
+.agent-canvas-node-result .agent-canvas-node-dot { border-color: #dcd8e5; background: #f0edf5; }
+.agent-canvas-node-blocked .agent-canvas-node-dot { border-color: #ff8da4; background: #d84264; }
+.agent-canvas-node-running .agent-canvas-node-dot { border-color: #b9a7ff; background: #8c6df2; animation: agent-dot-breathe 0.9s ease-in-out infinite; }
+.agent-canvas-node.selected .agent-canvas-node-dot { box-shadow: 0 0 0 4px rgba(166, 140, 255, 0.18); }
+
+.agent-canvas-node-label {
+  position: absolute;
+  left: 27px;
+  top: 50%;
+  max-width: 190px;
+  overflow: hidden;
+  transform: translateY(-50%);
+  color: rgba(244, 242, 250, 0.82);
+  font-family: var(--mono);
+  font-size: 0.61rem;
+  line-height: 1.35;
+  opacity: 0;
+  pointer-events: none;
+  text-align: left;
+  text-overflow: ellipsis;
+  text-shadow: 0 2px 8px #060608;
+  white-space: nowrap;
+}
+
+.agent-canvas-node:hover .agent-canvas-node-label,
+.agent-canvas-node.selected .agent-canvas-node-label,
+.agent-canvas-node-running .agent-canvas-node-label,
+.agent-canvas-node-blocked .agent-canvas-node-label { opacity: 1; }
+.agent-canvas-node.edge-right .agent-canvas-node-label { left: auto; right: 27px; text-align: right; }
+
+.agent-canvas-detail {
+  position: absolute;
+  left: var(--detail-x);
+  top: var(--detail-y);
+  z-index: 5;
+  width: min(270px, calc(100vw - 40px));
+  padding: 28px 0 0 28px;
+  pointer-events: none;
+  text-shadow: 0 2px 12px #060608;
+}
+
+.agent-canvas-detail strong { display: block; font-size: 0.72rem; font-weight: 580; }
+.agent-canvas-detail p { margin-top: 5px; color: rgba(210, 206, 222, 0.7); font-size: 0.65rem; line-height: 1.5; }
+.agent-canvas-detail.edge-right { padding: 28px 28px 0 0; transform: translateX(-100%); text-align: right; }
+
+.agent-canvas-composer {
+  position: absolute;
+  right: 32px;
+  top: 50%;
+  z-index: 8;
+  width: min(420px, calc(100vw - 40px));
+  min-height: 170px;
+  transform: translateY(-50%);
+  border: 1px solid rgba(216, 211, 228, 0.36);
+  border-radius: 10px;
+  background: rgba(18, 17, 21, 0.96);
+  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55);
+}
+
+.agent-canvas-composer textarea {
+  width: 100%;
+  min-height: 170px;
+  resize: none;
+  padding: 22px 58px 22px 22px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #f4f2fa;
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.agent-canvas-composer textarea::placeholder { color: rgba(210, 206, 222, 0.45); }
+.agent-canvas-composer textarea:focus { box-shadow: inset 0 0 0 1px rgba(166, 140, 255, 0.48); }
+.agent-canvas-composer button {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #a68cff;
+}
+
+.agent-canvas-composer button:hover:not(:disabled) { background: rgba(166, 140, 255, 0.1); }
+.agent-canvas-composer button:disabled { opacity: 0.28; }
+.agent-canvas-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@keyframes agent-node-arrive { from { opacity: 0; transform: translate(-50%, -50%) scale(0.2); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
+@keyframes agent-edge-breathe { 50% { opacity: 0.35; } }
+@keyframes agent-dot-breathe { 50% { transform: scale(1.35); } }
+@keyframes agent-core-breathe { 50% { box-shadow: 0 0 0 12px rgba(142, 111, 255, 0.08), 0 18px 55px rgba(0, 0, 0, 0.46); } }
+
+@media (max-width: 640px) {
+  .agent-canvas-core { width: 82px; height: 82px; }
+  .agent-canvas-composer { right: 20px; bottom: 20px; top: auto; transform: none; }
+  .agent-canvas-detail { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-canvas-core.running,
+  .agent-canvas-edge-running,
+  .agent-canvas-node,
+  .agent-canvas-node-running .agent-canvas-node-dot { animation: none; }
+}
+
 /* ---------- agent swarm graph ---------- */
 
 .swarm-shell {

@@ -24,6 +24,7 @@ import {
 } from "../../server/services/demo-scenario";
 import { AgentSetup } from "../AgentSetup";
 import { AgentExecutionGraph } from "../AgentExecutionGraph";
+import { AgentGraphArena } from "../AgentGraphArena";
 import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
@@ -453,6 +454,10 @@ export default function DashboardPage() {
     );
   }
 
+  if (dashboardSection === "graph") {
+    return <AgentGraphArena onExit={() => setDashboardSection("overview")} />;
+  }
+
   const spent = executed.reduce((sum, e) => sum + e.amount, 0n);
   const balance = INITIAL_BALANCE - spent;
   const authorizedTransactions = buildAuthorizedDemoHistory(executed, INITIAL_BALANCE);
@@ -496,7 +501,7 @@ export default function DashboardPage() {
           provisioning={provisioning}
           provisioningError={provisioningError}
         />
-      ) : (dashboardSection === "graph" || dashboardSection === "run") && policy && agent ? (
+      ) : dashboardSection === "run" && policy && agent ? (
         <div className="dashboard-run agent-graph-page">
           <div className="dashboard-workspace-intro">
             <div>
