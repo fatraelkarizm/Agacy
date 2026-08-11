@@ -299,7 +299,7 @@ export default function DashboardPage() {
         setAgent(draft);
         setPolicy(toSpendPolicy(draft));
         reset();
-        setDashboardSection("run");
+        setDashboardSection("graph");
       } catch (error) {
         setProvisioningError(
           error instanceof Error
@@ -322,7 +322,7 @@ export default function DashboardPage() {
    */
   const run = useCallback(async () => {
     const agentSigner = agentSignerRef.current;
-    if (!policy || !provisionedPolicy || !ownerWallet || !agentSigner) return;
+    if (!policy || !provisionedPolicy || !agentSigner) return;
 
     reset();
     setRunning(true);
@@ -340,7 +340,6 @@ export default function DashboardPage() {
     try {
       await runAgentOnChain({
         client: devnetClient,
-        ownerWallet,
         policyAccount: address(provisionedPolicy.policyAccount),
         agentSigner,
         goal: RUN_GOAL,
@@ -365,13 +364,13 @@ export default function DashboardPage() {
       setRunError(
         error instanceof Error
           ? error.message
-          : "The run could not reach devnet. Check your wallet and SOL balance.",
+          : "The run could not reach devnet. Check the agent fee budget.",
       );
     }
 
     setRunning(false);
     setDone(true);
-  }, [agent, ownerWallet, policy, provisionedPolicy, reset]);
+  }, [agent, policy, provisionedPolicy, reset]);
 
   /**
    * Runs one attack for real and stores whatever the chain said. Nothing here
@@ -497,12 +496,12 @@ export default function DashboardPage() {
           provisioning={provisioning}
           provisioningError={provisioningError}
         />
-      ) : dashboardSection === "run" && policy && agent ? (
-        <div className="dashboard-run">
+      ) : (dashboardSection === "graph" || dashboardSection === "run") && policy && agent ? (
+        <div className="dashboard-run agent-graph-page">
           <div className="dashboard-workspace-intro">
             <div>
-              <h2>Watch {agent.name} work.</h2>
-              <p>Every verdict below is signed to devnet by the agent and decided by the program.</p>
+              <h2>{agent.name} mission control.</h2>
+              <p>Watch one mandate fan out into policy-scoped actions across Solana devnet.</p>
             </div>
             <span className="hint">
               Max {formatTokens(policy.maxPerTransfer)} USDC per transfer
@@ -524,16 +523,21 @@ export default function DashboardPage() {
 
           {!agentSignerRef.current && (
             <p className="hint">
-              The agent key lives in this tab only and was lost on refresh. Create an agent again to
-              run.
+              The session key expired on refresh. Create the agent again to restore autonomous signing.
             </p>
           )}
 
           {runError && <p className="hint">{runError}</p>}
 
+          <section className="autonomy-strip" aria-label="Autonomy model">
+            <div><small>Owner approval</small><strong>Once at setup</strong></div>
+            <div><small>During a run</small><strong>Zero wallet prompts</strong></div>
+            <div><small>Execution signer</small><strong>Session agent key</strong></div>
+          </section>
+
           <div className="controls">
-            <button className="primary" onClick={run} disabled={running}>
-              {running ? "Agent running..." : done ? "Run again" : "Start agent"}
+            <button className="primary" onClick={run} disabled={running || !agentSignerRef.current}>
+              {running ? "Swarm running..." : done ? "Run unattended again" : "Start unattended run"}
             </button>
             <button onClick={reset} disabled={running || graphEvents.length <= 1}>
               Reset
@@ -554,6 +558,8 @@ export default function DashboardPage() {
           </div>
 
           <AgentExecutionGraph
+            agentName={agent.name}
+            agentAddress={provisionedPolicy?.agentAddress}
             publicEvents={graphEvents.map((event) => event.public)}
             authorizedEvents={graphEvents.map((event) => event.authorized)}
             ownerView={ownerView}
@@ -899,7 +905,7 @@ function AttackSimulationPanel({ steps }: { steps: readonly AttackStepDTO[] }) {
         )}
         {steps.length > 0 && (
           <div className="verdict private">
-            Same attacker, same scan, same two transactions — one wallet gives up a target, the
+            Same attacker, same scan, same two transactions. One wallet gives up a target, the
             other gives up nothing.
           </div>
         )}

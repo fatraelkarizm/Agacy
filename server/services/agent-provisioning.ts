@@ -1,4 +1,5 @@
 import { generateKeyPairSigner, type KeyPairSigner } from "@solana/kit";
+import { getTransferSolInstruction } from "@solana-program/system";
 import {
   buildInitializePolicyV2Instruction,
   derivePolicyAddress,
@@ -10,6 +11,8 @@ import { getOwnerTransactionSigner } from "./wallet-connection";
 import { toPolicyInitParams } from "./agent-setup";
 import type { AgentDraftDTO } from "../dto/agent.dto";
 import type { WalletConnectionDTO } from "../dto/wallet.dto";
+
+export const AGENT_SESSION_FEE_BUDGET_LAMPORTS = 5_000_000n;
 
 /**
  * Turns an onboarding draft into a real on-chain policy account, signed by
@@ -30,9 +33,9 @@ import type { WalletConnectionDTO } from "../dto/wallet.dto";
  *   derived from `[b"policy", owner, agent]`, so the same owner/agent pair
  *   always resolves to the same account rather than quietly creating a second
  *   one.
- * - It is a single instruction. Anchor's `init` allocates and writes in the
- *   same call, so there is no created-but-uninitialized intermediate state for
- *   anything to observe.
+ * - The owner signs once. The same transaction creates the policy and gives
+ *   the session agent a small SOL fee budget, so later policy checks do not
+ *   reopen the owner wallet for every task.
  *
  * The agent keypair generated here is returned to the caller and kept for the
  * browser session only — never stored, never transmitted. That is what lets the
@@ -86,7 +89,16 @@ export async function provisionAgentPolicy(
     periodSeconds: policy.periodSeconds,
   });
 
-  const signature = await sendInstructionsWithSigner(params.client, ownerSigner, [instruction]);
+  const fundAgent = getTransferSolInstruction({
+    source: ownerSigner,
+    destination: agentSigner.address,
+    amount: AGENT_SESSION_FEE_BUDGET_LAMPORTS,
+  });
+
+  const signature = await sendInstructionsWithSigner(params.client, ownerSigner, [
+    instruction,
+    fundAgent,
+  ]);
 
   return {
     policyAccount,

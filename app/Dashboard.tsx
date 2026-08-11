@@ -10,6 +10,7 @@ import {
   FileText,
   Fingerprint,
   Gear,
+  Graph,
   Key,
   ListBullets,
   LockKey,
@@ -40,6 +41,7 @@ import { formatTokens } from "../server/services/demo-scenario";
 const NAV_ITEMS = [
   { id: "overview", label: "Overview", icon: SquaresFour },
   { id: "agents", label: "Agents", icon: Robot },
+  { id: "graph", label: "Agent Graph", icon: Graph },
   { id: "transactions", label: "Transactions", icon: Receipt },
   { id: "policies", label: "Policies", icon: SlidersHorizontal },
   { id: "security", label: "Security", icon: ShieldCheck },
@@ -54,7 +56,8 @@ const SECTION_TITLES: Record<DashboardSection, string> = {
   security: "Privacy & Security",
   settings: "Owner Settings",
   onboarding: "Create private agent",
-  run: "Agent execution",
+  graph: "Agent Graph",
+  run: "Agent Graph",
 };
 
 interface DashboardProps {
@@ -100,7 +103,7 @@ export function Dashboard({
   onLanding,
   children,
 }: DashboardProps) {
-  const activeNav = section === "onboarding" || section === "run" ? "agents" : section;
+  const activeNav = section === "onboarding" ? "agents" : section === "run" ? "graph" : section;
 
   return (
     <div className="dashboard-app">
@@ -198,7 +201,19 @@ function DashboardSectionContent(props: DashboardSectionContentProps) {
           status={props.operationalStatus}
           currentTask={props.currentTask}
           onNewAgent={props.onNewAgent}
-          onOpen={() => props.onNavigate("run")}
+          onOpen={() => props.onNavigate("graph")}
+          expanded
+        />
+      );
+    case "graph":
+    case "run":
+      return (
+        <AgentRegistry
+          agent={props.agent}
+          status={props.operationalStatus}
+          currentTask={props.currentTask}
+          onNewAgent={props.onNewAgent}
+          onOpen={() => props.onNavigate("graph")}
           expanded
         />
       );
@@ -255,7 +270,7 @@ function Overview({
           status={operationalStatus}
           currentTask={currentTask}
           onNewAgent={onNewAgent}
-          onOpen={() => onNavigate("run")}
+          onOpen={() => onNavigate("graph")}
           onViewAll={() => onNavigate("agents")}
         />
         <PolicyShell
@@ -362,7 +377,7 @@ function PolicyShell({
   const state = onChainPolicy?.custodiedTokenAccount
     ? "Custody held on-chain"
     : onChainPolicy
-      ? "Provisioned — custody not handed over"
+      ? "Provisioned. Custody not handed over"
       : "Local draft only";
 
   return (
@@ -519,7 +534,7 @@ function PolicyWorkspace({
               Deliberately not falling back to the plaintext numbers when the
               limits are encrypted. The program refuses to enforce those fields
               in that state, so showing them would present a number that is not
-              the policy — the exact confusion this feature exists to remove.
+              the policy. This feature exists to remove that confusion.
             */}
             <PolicyFact
               label="On-chain per transfer"

@@ -1,9 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { AuthorizedAgentRunEventDTO } from "../../../server/dto/agent-run.dto";
 import {
   createAgentRunGoalEvent,
+  runAgentOnChain,
   toPublicAgentRunEvent,
 } from "../../../server/services/agent-run";
+
+const { sendInstructionsWithSigner } = vi.hoisted(() => ({
+  sendInstructionsWithSigner: vi.fn(),
+}));
+
+vi.mock("../../../server/data/solana-client", () => ({ sendInstructionsWithSigner }));
+
+beforeEach(() => {
+  sendInstructionsWithSigner.mockReset();
+  sendInstructionsWithSigner.mockResolvedValue("AgentSignedDevnetSignature");
+});
 
 describe("agent run graph privacy boundary", () => {
   it("keeps the queued owner goal out of its public pair", () => {
@@ -56,5 +68,28 @@ describe("agent run graph privacy boundary", () => {
       status: "confirmed",
       signature: "DevnetSignature",
     });
+  });
+
+  it("uses the funded agent as fee payer without reopening the owner wallet", async () => {
+    const agentSigner = { address: "Agent1111111111111111111111111111111111111" } as never;
+
+    await runAgentOnChain({
+      client: {} as never,
+      policyAccount: "Policy111111111111111111111111111111111111" as never,
+      agentSigner,
+      goal: "Process the private task queue.",
+      tasks: [
+        {
+          label: "Infrastructure invoice",
+          reasoning: "Renew the private service.",
+          amount: 4_200_000n,
+          recipient: "Vendor111111111111111111111111111111111111",
+        },
+      ],
+      onStep: vi.fn(),
+    });
+
+    expect(sendInstructionsWithSigner).toHaveBeenCalledOnce();
+    expect(sendInstructionsWithSigner.mock.calls[0]?.[1]).toBe(agentSigner);
   });
 });

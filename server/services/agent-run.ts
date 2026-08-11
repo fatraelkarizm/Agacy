@@ -2,8 +2,6 @@ import type { Address, TransactionSigner } from "@solana/kit";
 import { buildAuthorizeSpendV2Instruction } from "../data/policy-program-v2";
 import { sendInstructionsWithSigner } from "../data/solana-client";
 import type { SolanaClient } from "../data/solana-client";
-import { getOwnerTransactionSigner } from "./wallet-connection";
-import type { WalletConnectionDTO } from "../dto/wallet.dto";
 import type {
   AgentRunGraphEventDTO,
   AgentRunOutcomeDTO,
@@ -54,7 +52,6 @@ const PROGRAM_ERRORS: Record<number, string> = {
 
 export interface RunAgentOnChainParams {
   readonly client: SolanaClient;
-  readonly ownerWallet: WalletConnectionDTO;
   readonly policyAccount: Address;
   /** Kept in memory for the session only — see agent-provisioning.ts. */
   readonly agentSigner: TransactionSigner;
@@ -65,8 +62,6 @@ export interface RunAgentOnChainParams {
 }
 
 export async function runAgentOnChain(params: RunAgentOnChainParams): Promise<void> {
-  const ownerSigner = getOwnerTransactionSigner(params.ownerWallet);
-
   await emitGraphEvent(params, {
     id: "goal",
     taskIndex: -1,
@@ -107,7 +102,6 @@ export async function runAgentOnChain(params: RunAgentOnChainParams): Promise<vo
 
     const outcome = await authorizeOnChain({
       client: params.client,
-      ownerSigner,
       policyAccount: params.policyAccount,
       agentSigner: params.agentSigner,
       amount: task.amount,
@@ -191,7 +185,6 @@ export function createAgentRunGoalEvent(goal: string): AgentRunGraphEventDTO {
 
 async function authorizeOnChain(params: {
   client: SolanaClient;
-  ownerSigner: TransactionSigner;
   policyAccount: Address;
   agentSigner: TransactionSigner;
   amount: bigint;
@@ -203,7 +196,7 @@ async function authorizeOnChain(params: {
   });
 
   try {
-    const signature = await sendInstructionsWithSigner(params.client, params.ownerSigner, [
+    const signature = await sendInstructionsWithSigner(params.client, params.agentSigner, [
       instruction,
     ]);
     return { status: "authorized", signature };

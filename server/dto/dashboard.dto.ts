@@ -6,6 +6,7 @@ export type DashboardSection =
   | "security"
   | "settings"
   | "onboarding"
+  | "graph"
   | "run";
 
 export type AgentOperationalStatus = "active" | "idle";
