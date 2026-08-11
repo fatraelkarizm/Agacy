@@ -1,14 +1,16 @@
-import type { Address } from "@solana/kit";
-import type { ElGamalPubkey } from "@solana/zk-sdk/node";
+import type { Address, TransactionSigner } from "@solana/kit";
+import { ElGamalCiphertext, type ElGamalPubkey } from "@solana/zk-sdk/node";
 import type { SolanaClient } from "../../server/data/solana-client.js";
 import { sendInstructions } from "../../server/data/confidential-mint.js";
 import { executeConfidentialTransfer } from "../../server/data/confidential-transfer.js";
+import { policyGatedConfidentialTransfer } from "../../server/data/confidential-transfer-policy.js";
 import { fetchConfidentialBalance } from "../../server/data/confidential-balance.js";
 import { deriveReasoningKey, encryptReasoning } from "../../server/data/reasoning-crypto.js";
 import { buildMemoInstruction } from "../../server/data/memo.js";
 import type { ConfidentialKeys } from "../../server/data/confidential-keys.js";
 import type { loadOrCreatePayer } from "../../server/data/solana-payer.js";
 import type { AgentEffects } from "../tools/toolkit.js";
+import { fetchPolicyV2Account } from "../../server/data/policy-program-v2.js";
 import { fetchTokenPrice, fetchSwapQuote } from "./jupiter.js";
 
 /**
@@ -37,6 +39,25 @@ export interface DevnetEffectsDeps {
   /** Reasoning is encrypted under a key derived from this signature — same derivation as confidential-keys.ts, domain-separated. */
   readonly reasoningSeedSignature: Uint8Array;
   readonly recipientAccounts: ReadonlyMap<string, { pubkey: ElGamalPubkey }>;
+  /**
+   * When set, payments are forwarded through the deployed policy program
+   * instead of being signed directly by the account owner.
+   *
+   * This is the difference between a limit the agent could route around and
+   * one it cannot. Without it, `agent/policy-guard.ts` is the only thing
+   * enforcing the budget — good hygiene, but enforcement by our own wrapper is
+   * exactly what this project argues is not enough. With it, the token account
+   * answers to the program, and the only signature that moves funds is one the
+   * program produces after checking the limit.
+   *
+   * Requires the policy PDA to already hold custody of `senderAccount`.
+   */
+  readonly onChainPolicy?: {
+    readonly policyAccount: Address;
+    readonly agent: TransactionSigner;
+    readonly maxPerTransfer: bigint;
+    readonly maxPerPeriod: bigint;
+  };
 }
 
 export function buildDevnetEffects(deps: DevnetEffectsDeps): AgentEffects {
@@ -51,24 +72,43 @@ export function buildDevnetEffects(deps: DevnetEffectsDeps): AgentEffects {
       }
 
       const state = await fetchConfidentialBalance(deps.client, deps.senderAccount, deps.senderKeys);
-      const { signature } = await executeConfidentialTransfer(deps.client, deps.payer, {
-        sourceToken: deps.senderAccount,
-        destinationToken: recipient as Address,
-        mint: deps.mint,
-        owner: deps.payer,
-        senderKeys: deps.senderKeys,
-        recipientElGamalPubkey: recipientKeys.pubkey,
-        availableBalance: state.availableBalance,
-        availableBalanceCiphertext: state.availableBalanceCiphertext,
-        amount,
-      });
-
       const reasoningKey = await deriveReasoningKey(deps.reasoningSeedSignature);
       const ciphertext = await encryptReasoning(reasoningKey, reasoning);
-      // Memo requires valid UTF-8; raw ciphertext bytes are not, so they travel as base64 text.
-      await sendInstructions(deps.client, deps.payer, [
-        buildMemoInstruction(new TextEncoder().encode(Buffer.from(ciphertext).toString("base64"))),
-      ]);
+      const memo = buildMemoInstruction(
+        new TextEncoder().encode(Buffer.from(ciphertext).toString("base64")),
+      );
+      const { signature } = deps.onChainPolicy
+        ? await policyGatedConfidentialTransfer(deps.client, deps.payer, {
+            policyAccount: deps.onChainPolicy.policyAccount,
+            agent: deps.onChainPolicy.agent,
+            sourceToken: deps.senderAccount,
+            destinationToken: recipient as Address,
+            mint: deps.mint,
+            senderKeys: deps.senderKeys,
+            recipientElGamalPubkey: recipientKeys.pubkey,
+            availableBalance: state.availableBalance,
+            availableBalanceCiphertext: state.availableBalanceCiphertext,
+            amount,
+            maxPerTransfer: deps.onChainPolicy.maxPerTransfer,
+            maxPerPeriod: deps.onChainPolicy.maxPerPeriod,
+            additionalInstructions: [memo],
+          })
+        : await executeConfidentialTransfer(deps.client, deps.payer, {
+            sourceToken: deps.senderAccount,
+            destinationToken: recipient as Address,
+            mint: deps.mint,
+            owner: deps.payer,
+            senderKeys: deps.senderKeys,
+            recipientElGamalPubkey: recipientKeys.pubkey,
+            availableBalance: state.availableBalance,
+            availableBalanceCiphertext: state.availableBalanceCiphertext,
+            amount,
+          });
+
+      // The policy path included this in the transfer transaction atomically.
+      // The direct-owner fallback is only a legacy/demo path and still needs a
+      // second transaction because its transfer helper owns submission.
+      if (!deps.onChainPolicy) await sendInstructions(deps.client, deps.payer, [memo]);
 
       return { signature };
     },
@@ -93,6 +133,29 @@ export function buildDevnetEffects(deps: DevnetEffectsDeps): AgentEffects {
         }
       }
       throw lastError;
+    },
+
+    async readOnChainPolicy() {
+      if (!deps.onChainPolicy) return null;
+      const state = await fetchPolicyV2Account(deps.client, deps.onChainPolicy.policyAccount);
+      if (!state) return null;
+      const encryptedSpent = state.confidentialLimits
+        ? ElGamalCiphertext.fromBytes(state.confidentialLimits.spentInPeriodCt)
+        : null;
+      return {
+        policyAccount: deps.onChainPolicy.policyAccount,
+        maxPerTransfer: state.confidentialLimits
+          ? deps.onChainPolicy.maxPerTransfer
+          : state.maxPerTransfer,
+        maxPerPeriod: state.confidentialLimits
+          ? deps.onChainPolicy.maxPerPeriod
+          : state.maxPerPeriod,
+        spentInPeriod: encryptedSpent
+          ? deps.senderKeys.elGamal.secret().decrypt(encryptedSpent)
+          : state.spentInPeriod,
+        custodiedTokenAccount: state.custodiedTokenAccount,
+        limitsAreConfidential: state.confidentialLimits !== null,
+      };
     },
 
     fetchTokenPrice: ({ mint }) => fetchTokenPrice(mint),

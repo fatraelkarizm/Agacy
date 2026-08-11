@@ -86,6 +86,18 @@ describe("authorizing a spend within the limits", () => {
     expect(authorization.amountCiphertext.length).toBe(64);
   });
 
+  it("can bind proofs to the transfer protocol's exact randomized ciphertext", () => {
+    const transferCiphertext = keypair.pubkey().encryptU64(amount).toBytes();
+    const bound = buildConfidentialAuthorization(
+      keypair,
+      state,
+      values,
+      amount,
+      transferCiphertext,
+    );
+    expect(bound.amountCiphertext).toEqual(transferCiphertext);
+  });
+
   /**
    * The load-bearing assertion. The program does not trust any ciphertext the
    * caller supplies for the difference — it recomputes it from stored state.

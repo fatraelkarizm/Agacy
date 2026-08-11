@@ -42,4 +42,10 @@ pub enum PolicyError {
     NoConfidentialLimits,
     #[msg("This policy enforces confidential limits — use the confidential authorization path")]
     ConfidentialLimitsRequired,
+    #[msg("A confidential transfer must use amount-bound confidential authorization")]
+    ConfidentialTransferRequiresBoundAuthorization,
+    #[msg("Forwarded confidential transfer does not use the supported context-account proof layout")]
+    MalformedBoundConfidentialTransfer,
+    #[msg("Policy and Token-2022 must consume the same transfer-validity proof account")]
+    TransferProofAccountMismatch,
 }

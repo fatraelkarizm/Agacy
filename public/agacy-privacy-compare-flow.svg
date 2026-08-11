@@ -85,7 +85,7 @@
       <rect x="830" y="230" width="700" height="500" rx="24" fill="url(#privateCard)" stroke="#4ade9b" stroke-opacity=".24"/>
       <rect x="830" y="230" width="700" height="7" rx="4" fill="#4ade9b"/>
     </g>
-    <text x="870" y="284" class="label" fill="#4ade9b">WITH AGACY &#8212; DEVNET PROVEN 7/7</text>
+    <text x="870" y="284" class="label" fill="#4ade9b">WITH AGACY &#183; LIVE DEVNET &#183; AMOUNT-BOUND</text>
     <text x="870" y="322" class="columnTitle" fill="#f3f1fa">Confidential values, bounded autonomy</text>
 
     <rect x="870" y="358" width="150" height="82" rx="14" class="node"/>

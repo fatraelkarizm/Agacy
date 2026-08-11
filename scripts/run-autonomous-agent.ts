@@ -5,7 +5,7 @@ import { SolanaAgentKit } from "solana-agent-kit";
 import type { SpendPolicyDTO } from "../server/dto/agent.dto.js";
 import { createDevnetClient, getLamportBalance } from "../server/data/solana-client.js";
 import { loadOrCreatePayer } from "../server/data/solana-payer.js";
-import { createConfidentialMint } from "../server/data/confidential-mint.js";
+import { createConfidentialMint, sendInstructions } from "../server/data/confidential-mint.js";
 import { createConfidentialTokenAccount } from "../server/data/confidential-account.js";
 import { deriveConfidentialKeys } from "../server/data/confidential-keys.js";
 import { depositToConfidentialBalance, applyPendingBalance } from "../server/data/confidential-transfer.js";
@@ -15,6 +15,14 @@ import { resolveNetwork, authorizeMainnetRun } from "../agent/network.js";
 import { runAutonomousAgent, type AgentRunStep } from "../agent/autonomous-loop.js";
 import { buildDevnetEffects } from "../agent/effects/devnet.js";
 import { buildMainnetEffects } from "../agent/effects/mainnet.js";
+import {
+  buildAssumeCustodyInstruction,
+  buildInitializeConfidentialPolicyV2Instruction,
+  derivePolicyAddress,
+  POLICY_V2_PROGRAM_ID,
+} from "../server/data/policy-program-v2.js";
+import { encryptLimit } from "../server/data/confidential-limits.js";
+import { policyGatedConfidentialTransfer } from "../server/data/confidential-transfer-policy.js";
 
 /**
  * Runs the autonomous agent for real — the model picks its own tools and
@@ -43,6 +51,16 @@ function logStep(step: AgentRunStep): void {
   console.log(`${marker} ${step.tool}${step.reason ? `  (${step.reason})` : ""}`);
 }
 
+function customProgramErrorCode(error: unknown): number | null {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && current && typeof current === "object"; depth++) {
+    const context = (current as { context?: { code?: unknown } }).context;
+    if (typeof context?.code === "number") return context.code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return null;
+}
+
 async function runDevnet(): Promise<void> {
   const client = createDevnetClient();
   const payer = await loadOrCreatePayer();
@@ -50,6 +68,7 @@ async function runDevnet(): Promise<void> {
   const senderKeys = deriveConfidentialKeys(new Uint8Array(64).fill(11));
   const recipientKeys = deriveConfidentialKeys(new Uint8Array(64).fill(22));
   const recipientOwner = await generateKeyPairSigner();
+  const agent = await generateKeyPairSigner();
 
   console.log("owner:", payer.address);
 
@@ -74,8 +93,65 @@ async function runDevnet(): Promise<void> {
     newAvailableBalance: DEPOSIT, expectedPendingCreditCounter: 1n,
   });
 
+  const policyAccount = await derivePolicyAddress(payer.address, agent.address);
+  await sendInstructions(client, payer, [
+    buildInitializeConfidentialPolicyV2Instruction({
+      policyAccount,
+      owner: payer,
+      agent: agent.address,
+      limitPubkey: senderKeys.elGamal.pubkey().toBytes(),
+      maxPerTransferCt: encryptLimit(senderKeys.elGamal, POLICY.maxPerTransfer),
+      maxPerPeriodCt: encryptLimit(senderKeys.elGamal, POLICY.maxPerPeriod),
+      periodSeconds: 3_600n,
+    }),
+    buildAssumeCustodyInstruction({
+      policyAccount,
+      owner: payer,
+      tokenAccount: senderAccount,
+    }),
+  ]);
+  console.log("policy:", policyAccount, "| autonomous agent:", agent.address);
+
   const balance = await fetchConfidentialBalance(client, senderAccount, senderKeys);
   const solLamports = await getLamportBalance(client, payer.address);
+
+  const attackActualAmount = 25_000_000n;
+  const attackClaimedAmount = 1_000_000n;
+  let amountClaimAttackError = "";
+  try {
+    await policyGatedConfidentialTransfer(client, payer, {
+      policyAccount,
+      agent,
+      sourceToken: senderAccount,
+      destinationToken: recipientAccount,
+      mint,
+      senderKeys,
+      recipientElGamalPubkey: recipientKeys.elGamal.pubkey(),
+      availableBalance: balance.availableBalance,
+      availableBalanceCiphertext: balance.availableBalanceCiphertext,
+      amount: attackActualAmount,
+      maxPerTransfer: POLICY.maxPerTransfer,
+      maxPerPeriod: POLICY.maxPerPeriod,
+      policyProofAmount: attackClaimedAmount,
+    });
+    throw new Error("Amount-claim attack unexpectedly landed");
+  } catch (error) {
+    const code = customProgramErrorCode(error);
+    amountClaimAttackError = `custom program error ${code ?? "unknown"}: ${(error as Error).message}`;
+    if (code !== 6017) throw error;
+  }
+  const recipientAfterAttack = await fetchConfidentialBalance(
+    client,
+    recipientAccount,
+    recipientKeys,
+  );
+  if (recipientAfterAttack.availableBalance !== 0n) {
+    throw new Error("Rejected amount-claim attack changed the recipient balance");
+  }
+  console.log(
+    `amount-binding attack rejected: claimed ${attackClaimedAmount}, encrypted transfer ` +
+      `${attackActualAmount}, vendor balance stayed 0`,
+  );
 
   // Agent Kit's own wallet/connection are never touched by our tool handlers
   // (they close over the real devnet effects below, using @solana/kit
@@ -96,6 +172,12 @@ async function runDevnet(): Promise<void> {
     mint,
     reasoningSeedSignature: new Uint8Array(64).fill(33),
     recipientAccounts: new Map([[recipientAccount, { pubkey: recipientKeys.elGamal.pubkey() }]]),
+    onChainPolicy: {
+      policyAccount,
+      agent,
+      maxPerTransfer: POLICY.maxPerTransfer,
+      maxPerPeriod: POLICY.maxPerPeriod,
+    },
   });
 
   // Wrapped only so this script can capture real signatures for the UI proof
@@ -266,9 +348,19 @@ async function runDevnet(): Promise<void> {
   const proof = {
     capturedAt: new Date().toISOString(),
     cluster: "devnet",
+    programId: POLICY_V2_PROGRAM_ID,
     ownerAddress: payer.address,
+    policyAccount,
+    agentAddress: agent.address,
     vendorAccount: recipientAccount,
     policy: { maxPerTransfer: POLICY.maxPerTransfer.toString(), maxPerPeriod: POLICY.maxPerPeriod.toString() },
+    amountClaimAttack: {
+      claimedAmount: attackClaimedAmount.toString(),
+      encryptedTransferAmount: attackActualAmount.toString(),
+      rejectedOnChain: true,
+      vendorBalanceAfter: recipientAfterAttack.availableBalance.toString(),
+      error: amountClaimAttackError,
+    },
     phase1: {
       goal: goal1,
       steps: result1.steps,

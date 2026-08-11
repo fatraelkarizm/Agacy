@@ -7,6 +7,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   buildAssumeCustodyInstruction,
   buildAuthorizeAndInvokeInstruction,
+  buildAuthorizeConfidentialAndInvokeInstruction,
   buildAuthorizeSpendV2Instruction,
   buildCustodyMaintenanceInstruction,
   buildInitializeConfidentialPolicyV2Instruction,
@@ -91,6 +92,17 @@ describe("anchor discriminators", () => {
       agent: agentSigner,
       targetProgram: TOKEN_2022_PROGRAM_ID,
       instructionData: new Uint8Array([27, 8]),
+      forwardedAccounts: [],
+    }).data],
+    ["authorize_confidential_and_invoke", buildAuthorizeConfidentialAndInvokeInstruction({
+      policyAccount: POLICY,
+      agent: agentSigner,
+      targetProgram: TOKEN_2022_PROGRAM_ID,
+      transferEqualityProof: OWNER,
+      periodEqualityProof: AGENT,
+      rangeProof: RESCUE,
+      transferValidityProof: POLICY,
+      instructionData: new Uint8Array([27, 7]),
       forwardedAccounts: [],
     }).data],
   ];
@@ -267,6 +279,31 @@ describe("authorize_and_invoke", () => {
 
   it("puts the source account first, which is what the program checks against custody", () => {
     expect(ix.accounts[3]?.address).toBe(TOKEN_ACCOUNT);
+  });
+});
+
+describe("authorize_confidential_and_invoke", () => {
+  const ix = buildAuthorizeConfidentialAndInvokeInstruction({
+    policyAccount: POLICY,
+    agent: agentSigner,
+    targetProgram: TOKEN_2022_PROGRAM_ID,
+    transferEqualityProof: OWNER,
+    periodEqualityProof: AGENT,
+    rangeProof: RESCUE,
+    transferValidityProof: POLICY,
+    instructionData: new Uint8Array([27, 7, 0, 0]),
+    forwardedAccounts: [{ address: TOKEN_ACCOUNT, role: 1 }],
+  });
+
+  it("accepts no caller-supplied amount claim", () => {
+    const view = new DataView(ix.data.buffer);
+    expect(view.getUint32(8, true)).toBe(4);
+    expect([...ix.data.slice(12)]).toEqual([27, 7, 0, 0]);
+  });
+
+  it("passes the validity proof separately before forwarded Token-2022 accounts", () => {
+    expect(ix.accounts[6]?.address).toBe(POLICY);
+    expect(ix.accounts[7]?.address).toBe(TOKEN_ACCOUNT);
   });
 });
 

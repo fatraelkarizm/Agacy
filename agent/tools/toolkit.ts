@@ -46,6 +46,20 @@ export interface AgentEffects {
     reasoning: string;
   }): Promise<{ signature: string }>;
   requestDevnetAirdrop(input: { lamports: bigint }): Promise<{ signature: string }>;
+  /**
+   * The policy as the chain holds it, or `null` when this run is not gated
+   * on-chain. Deliberately separate from the locally-tracked budget the guard
+   * keeps: if the two ever disagree, the chain is right and the difference is
+   * worth seeing rather than smoothing over.
+   */
+  readOnChainPolicy(): Promise<{
+    policyAccount: string;
+    maxPerTransfer: bigint;
+    maxPerPeriod: bigint;
+    spentInPeriod: bigint;
+    custodiedTokenAccount: string | null;
+    limitsAreConfidential: boolean;
+  } | null>;
   fetchTokenPrice(input: { mint: string }): Promise<{ mint: string; priceUsd: number | null }>;
   fetchSwapQuote(input: {
     inputMint: string;
@@ -133,6 +147,42 @@ export function buildToolkit(): readonly AgacyTool[] {
         realFundsAtRisk: context.cluster === "mainnet",
         maxSpendSol: context.maxSpendSol,
       }),
+    },
+
+    {
+      name: "check_on_chain_policy",
+      description:
+        "Read the spend policy straight from the deployed program on-chain, rather than from " +
+        "this run's local bookkeeping. Tells you the real limits, how much of the period budget " +
+        "the chain has recorded as spent, and whether the policy program holds custody of the " +
+        "payment account. Use it to confirm what is actually enforced before planning a large " +
+        "payment, or when a payment was refused and you want the authoritative reason.",
+      schema: z.object({}),
+      spendAmount: null,
+      execute: async (_input, context) => {
+        const state = await context.effects.readOnChainPolicy();
+        if (!state) {
+          return {
+            status: "not_gated_on_chain",
+            note:
+              "This run is not bound to a policy account, so limits are enforced only by the " +
+              "local guard. Treat the numbers from get_wallet_overview as advisory.",
+          };
+        }
+        return {
+          status: "enforced_on_chain",
+          policyAccount: state.policyAccount,
+          maxPerTransfer: state.maxPerTransfer.toString(),
+          maxPerPeriod: state.maxPerPeriod.toString(),
+          spentThisPeriodOnChain: state.spentInPeriod.toString(),
+          remainingThisPeriod: (state.maxPerPeriod - state.spentInPeriod).toString(),
+          custodiedTokenAccount: state.custodiedTokenAccount,
+          limitsAreConfidential: state.limitsAreConfidential,
+          note:
+            "These are the numbers the program enforces. If they disagree with " +
+            "get_wallet_overview, these win.",
+        };
+      },
     },
 
     {

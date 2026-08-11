@@ -28,6 +28,14 @@ export function buildMainnetEffects(deps: MainnetEffectsDeps): AgentEffects {
         "Unreachable: request_devnet_airdrop refuses on mainnet before calling this effect.",
       );
     },
+    // Mainnet runs are bounded by the SOL ceiling in network.ts, not by a
+    // policy account — there is no confidential mint provisioned there to
+    // custody. Returning null says exactly that rather than implying a limit
+    // the chain is not holding.
+    async readOnChainPolicy() {
+      return null;
+    },
+
     fetchTokenPrice: ({ mint }) => fetchTokenPrice(mint),
     fetchSwapQuote,
     async executeSwap({ inputMint, outputMint, amountLamports }) {

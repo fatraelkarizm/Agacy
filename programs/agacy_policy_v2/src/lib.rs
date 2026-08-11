@@ -24,9 +24,9 @@
 //!   and `custody_guard.rs` (a hard allowlist on what the PDA's signature can
 //!   ever authorize).
 //!
-//! See docs/PRIVACY_ARCHITECTURE.md section 14 for what this does and does
-//! not close — in particular §14.3, the confidential-amount-claim gap, which
-//! none of the above addresses.
+//! Confidential payments additionally derive their policy amount from the
+//! exact verifier-owned Token-2022 validity context consumed by the CPI. No
+//! separate caller-supplied amount claim exists on that path.
 
 pub mod confidential_limits;
 pub mod constants;
@@ -167,12 +167,10 @@ pub mod agacy_policy_v2 {
     /// custody rules, budget enforced over ciphertexts.
     pub fn authorize_confidential_and_invoke(
         ctx: Context<AuthorizeConfidentialAndInvoke>,
-        amount_ct: [u8; 64],
         instruction_data: Vec<u8>,
     ) -> Result<()> {
         crate::instructions::confidential::handle_authorize_confidential_and_invoke(
             ctx,
-            amount_ct,
             instruction_data,
         )
     }

@@ -431,8 +431,12 @@ export function buildAuthorizeConfidentialInstruction(params: AuthorizeConfident
 }
 
 export interface AuthorizeConfidentialAndInvokeParams
-  extends AuthorizeConfidentialParams {
+  extends ConfidentialProofAccounts {
+  readonly policyAccount: Address;
+  readonly agent: TransactionSigner;
   readonly targetProgram: Address;
+  /** Token-2022 validity context used to derive the amount on-chain. */
+  readonly transferValidityProof: Address;
   readonly instructionData: Uint8Array;
   readonly forwardedAccounts: readonly ForwardedAccount[];
 }
@@ -444,14 +448,11 @@ export interface AuthorizeConfidentialAndInvokeParams
 export function buildAuthorizeConfidentialAndInvokeInstruction(
   params: AuthorizeConfidentialAndInvokeParams,
 ) {
-  requireLength(params.amountCiphertext, 64, "amountCiphertext");
-
-  const data = new Uint8Array(8 + 64 + 4 + params.instructionData.length);
+  const data = new Uint8Array(8 + 4 + params.instructionData.length);
   const view = new DataView(data.buffer);
   data.set(IX_AUTHORIZE_CONFIDENTIAL_AND_INVOKE, 0);
-  data.set(params.amountCiphertext, 8);
-  view.setUint32(72, params.instructionData.length, true);
-  data.set(params.instructionData, 76);
+  view.setUint32(8, params.instructionData.length, true);
+  data.set(params.instructionData, 12);
 
   return {
     programAddress: POLICY_V2_PROGRAM_ID,
@@ -460,6 +461,7 @@ export function buildAuthorizeConfidentialAndInvokeInstruction(
       { address: params.agent.address, role: READONLY_SIGNER, signer: params.agent },
       { address: params.targetProgram, role: READONLY },
       ...proofAccountMetas(params),
+      { address: params.transferValidityProof, role: READONLY },
       ...params.forwardedAccounts.map((account) => ({
         address: account.address,
         role: account.role,

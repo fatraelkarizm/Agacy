@@ -70,7 +70,10 @@
 //!   three proof accounts instead of four.
 
 use anchor_lang::prelude::*;
-use solana_curve25519::ristretto::{add_ristretto, subtract_ristretto, PodRistrettoPoint};
+use solana_curve25519::{
+    ristretto::{add_ristretto, multiply_ristretto, subtract_ristretto, PodRistrettoPoint},
+    scalar::PodScalar,
+};
 
 use crate::error::PolicyError;
 
@@ -84,6 +87,7 @@ pub const ZK_ELGAMAL_PROOF_PROGRAM_ID: Pubkey = pubkey!("ZkE1Gama1Proof111111111
 /// silent hole rather than a visible failure.
 pub const PROOF_TYPE_CIPHERTEXT_COMMITMENT_EQUALITY: u8 = 3;
 pub const PROOF_TYPE_BATCHED_RANGE_PROOF_U64: u8 = 6;
+pub const PROOF_TYPE_BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY: u8 = 12;
 
 /// `ProofContextState`: authority(32) | proof_type(1) | context.
 const CONTEXT_AUTHORITY_LEN: usize = 32;
@@ -97,6 +101,16 @@ const EQUALITY_ACCOUNT_LEN: usize = CONTEXT_HEADER_LEN + EQUALITY_CONTEXT_LEN;
 const MAX_COMMITMENTS: usize = 8;
 const RANGE_CONTEXT_LEN: usize = MAX_COMMITMENTS * 32 + MAX_COMMITMENTS;
 const RANGE_ACCOUNT_LEN: usize = CONTEXT_HEADER_LEN + RANGE_CONTEXT_LEN;
+
+/// `BatchedGroupedCiphertext3HandlesValidityProofContext`:
+/// three pubkeys followed by two grouped ciphertexts. Each grouped ciphertext
+/// is commitment(32) | source handle(32) | destination handle(32) | auditor handle(32).
+const TRANSFER_VALIDITY_CONTEXT_LEN: usize = 32 * 3 + 128 * 2;
+const TRANSFER_VALIDITY_ACCOUNT_LEN: usize = CONTEXT_HEADER_LEN + TRANSFER_VALIDITY_CONTEXT_LEN;
+const GROUPED_LO_AT: usize = CONTEXT_HEADER_LEN + 32 * 3;
+const GROUPED_HI_AT: usize = GROUPED_LO_AT + 128;
+const SOURCE_HANDLE_AT: usize = 32;
+const TRANSFER_AMOUNT_LO_BITS: usize = 16;
 
 /// Each of the two differences gets half of the batched proof's 64-bit budget.
 ///
@@ -147,6 +161,17 @@ pub fn add_ciphertexts(left: &CiphertextBytes, right: &CiphertextBytes) -> Resul
     combine(left, right, true)
 }
 
+fn scale_ciphertext(value: &CiphertextBytes, scalar: &PodScalar) -> Result<CiphertextBytes> {
+    let mut out = [0u8; CIPHERTEXT_LEN];
+    for half in 0..2 {
+        let start = half * 32;
+        let point = PodRistrettoPoint(slice32(value, start));
+        let scaled = multiply_ristretto(scalar, &point).ok_or(PolicyError::InvalidCiphertext)?;
+        out[start..start + 32].copy_from_slice(&scaled.0);
+    }
+    Ok(out)
+}
+
 fn slice32(bytes: &[u8], start: usize) -> [u8; 32] {
     let mut out = [0u8; 32];
     out.copy_from_slice(&bytes[start..start + 32]);
@@ -195,6 +220,39 @@ pub fn read_equality_context(account: &AccountInfo) -> Result<EqualityContext> {
         ciphertext,
         commitment: slice32(&data, CONTEXT_HEADER_LEN + 96),
     })
+}
+
+/// Derive the exact amount ciphertext Token-2022 will consume from its already
+/// verified transfer-validity context. The source handle is used because a
+/// policy is keyed to the custodied source account's ElGamal key.
+pub fn read_transfer_amount_ciphertext(
+    account: &AccountInfo,
+    expected_source_pubkey: &[u8; 32],
+) -> Result<CiphertextBytes> {
+    let data = read_context_bytes(
+        account,
+        PROOF_TYPE_BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY,
+        TRANSFER_VALIDITY_ACCOUNT_LEN,
+    )?;
+    require!(
+        slice32(&data, CONTEXT_HEADER_LEN) == *expected_source_pubkey,
+        PolicyError::ProofUnderWrongKey
+    );
+
+    let grouped_ciphertext = |start: usize| {
+        let mut ciphertext = [0u8; CIPHERTEXT_LEN];
+        ciphertext[..32].copy_from_slice(&data[start..start + 32]);
+        ciphertext[32..].copy_from_slice(
+            &data[start + SOURCE_HANDLE_AT..start + SOURCE_HANDLE_AT + 32],
+        );
+        ciphertext
+    };
+    let lo = grouped_ciphertext(GROUPED_LO_AT);
+    let hi = grouped_ciphertext(GROUPED_HI_AT);
+    let mut weight_bytes = [0u8; 32];
+    weight_bytes[TRANSFER_AMOUNT_LO_BITS / 8] = 1;
+    let weighted_hi = scale_ciphertext(&hi, &PodScalar(weight_bytes))?;
+    add_ciphertexts(&lo, &weighted_hi)
 }
 
 /// Confirms the batched range proof covers exactly the two commitments given,
@@ -320,5 +378,35 @@ mod tests {
         let invalid = ciphertext([0xff; 32], [0xff; 32]);
         let valid = ciphertext(basepoint(), basepoint());
         assert!(subtract_ciphertexts(&valid, &invalid).is_err());
+    }
+
+    #[test]
+    fn derives_the_source_amount_from_a_verified_transfer_context() {
+        let source_pubkey = basepoint();
+        let mut data = vec![0u8; TRANSFER_VALIDITY_ACCOUNT_LEN];
+        data[CONTEXT_AUTHORITY_LEN] =
+            PROOF_TYPE_BATCHED_GROUPED_CIPHERTEXT_3_HANDLES_VALIDITY;
+        data[CONTEXT_HEADER_LEN..CONTEXT_HEADER_LEN + 32].copy_from_slice(&source_pubkey);
+        data[GROUPED_LO_AT..GROUPED_LO_AT + 32].copy_from_slice(&basepoint());
+        data[GROUPED_LO_AT + SOURCE_HANDLE_AT..GROUPED_LO_AT + SOURCE_HANDLE_AT + 32]
+            .copy_from_slice(&basepoint());
+
+        let key = Pubkey::new_unique();
+        let mut lamports = 0;
+        let account = AccountInfo::new(
+            &key,
+            false,
+            false,
+            &mut lamports,
+            &mut data,
+            &ZK_ELGAMAL_PROOF_PROGRAM_ID,
+            false,
+        );
+
+        assert_eq!(
+            read_transfer_amount_ciphertext(&account, &source_pubkey).unwrap(),
+            ciphertext(basepoint(), basepoint())
+        );
+        assert!(read_transfer_amount_ciphertext(&account, &[9u8; 32]).is_err());
     }
 }

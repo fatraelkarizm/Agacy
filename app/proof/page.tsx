@@ -50,6 +50,36 @@ export default function ProofPage() {
       </div>
 
       <div className="step-head" style={{ marginTop: "2.5rem" }}>
+        <h3>The policy checks the encrypted transfer, not the agent&apos;s claim.</h3>
+        <p className="section-sub">
+          A malicious run supplied a valid policy proof for one token beside a valid encrypted
+          transfer for twenty-five. The deployed program derived the real ciphertext from
+          Token-2022&apos;s proof context, rejected the mismatch, and moved nothing.
+        </p>
+      </div>
+
+      <div className="proof-grid">
+        <ProofItem label="Amount-bound policy account" value={autonomousProof.policyAccount} />
+        <ProofItem
+          label="Claimed amount"
+          value={formatTokens(autonomousProof.amountClaimAttack.claimedAmount)}
+        />
+        <ProofItem
+          label="Encrypted transfer amount"
+          value={formatTokens(autonomousProof.amountClaimAttack.encryptedTransferAmount)}
+        />
+        <div className="proof-item">
+          <div className="proof-label">On-chain result</div>
+          <div className="proof-verdict">
+            {autonomousProof.amountClaimAttack.rejectedOnChain &&
+            autonomousProof.amountClaimAttack.vendorBalanceAfter === "0"
+              ? "rejected, vendor balance stayed zero"
+              : "UNEXPECTED RESULT"}
+          </div>
+        </div>
+      </div>
+
+      <div className="step-head" style={{ marginTop: "2.5rem" }}>
         <h3>Not just the amount — the agent&apos;s reasoning too.</h3>
         <p className="section-sub">
           Confidential Transfer hides balances and amounts. It says nothing about why an agent

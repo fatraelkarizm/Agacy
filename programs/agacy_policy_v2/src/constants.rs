@@ -7,8 +7,7 @@ use anchor_lang::prelude::*;
 /// lets this program sign for the account via `invoke_signed` later, which is
 /// the prerequisite for CPI-ing into a token transfer as the delegate. See
 /// docs/PRIVACY_ARCHITECTURE.md section 14 for the full design and its
-/// honestly-documented limits (this closes the *structural* bypass, not the
-/// confidential-amount-claim bypass).
+/// honestly-documented limits.
 #[constant]
 pub const POLICY_SEED: &[u8] = b"policy";
 

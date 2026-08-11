@@ -20,11 +20,8 @@
 //! Token-2022 adds an instruction, and "fails open" here means "loses the
 //! account".
 //!
-//! Deliberately *not* claimed: this does not verify the amount encoded in a
-//! confidential transfer's ciphertext matches the `amount` the policy checked.
-//! That gap is documented in docs/PRIVACY_ARCHITECTURE.md §14.3 and is
-//! untouched by anything here — this file bounds *what kind of action* the
-//! PDA can sign, not *how much* an encrypted one moves.
+//! Amount binding lives next door in `instructions/confidential.rs`; this file
+//! still owns only the narrower question of which CPI shapes the PDA may sign.
 
 use anchor_lang::prelude::*;
 
@@ -86,6 +83,32 @@ pub fn classify_cpi(program_id: &Pubkey, data: &[u8]) -> Result<CpiKind> {
 
         _ => Err(PolicyError::ForbiddenCpiInstruction.into()),
     }
+}
+
+/// The plaintext authorization path must never forward an opaque transfer:
+/// its caller-supplied amount cannot be compared with the encrypted payload.
+pub fn require_non_confidential_spend(data: &[u8]) -> Result<()> {
+    require!(
+        data.first() != Some(&token_ix::CONFIDENTIAL_TRANSFER_EXTENSION),
+        PolicyError::ConfidentialTransferRequiresBoundAuthorization
+    );
+    Ok(())
+}
+
+/// Validate the one Token-2022 layout whose amount binding we understand.
+/// All proof offsets must be zero so Token-2022 consumes the same context
+/// accounts that this program inspects.
+pub fn require_bound_confidential_transfer(data: &[u8]) -> Result<()> {
+    const TRANSFER_DATA_LEN: usize = 169;
+    const PROOF_OFFSETS_AT: usize = 166;
+    require!(
+        data.len() == TRANSFER_DATA_LEN
+            && data[0] == token_ix::CONFIDENTIAL_TRANSFER_EXTENSION
+            && data[1] == confidential_ix::TRANSFER
+            && data[PROOF_OFFSETS_AT..] == [0u8; 3],
+        PolicyError::MalformedBoundConfidentialTransfer
+    );
+    Ok(())
 }
 
 #[cfg(test)]
@@ -200,5 +223,24 @@ mod tests {
             &[token_ix::CONFIDENTIAL_TRANSFER_EXTENSION]
         )
         .is_err());
+    }
+
+    #[test]
+    fn plaintext_path_refuses_an_opaque_confidential_amount() {
+        assert!(require_non_confidential_spend(&confidential(confidential_ix::TRANSFER)).is_err());
+        assert!(require_non_confidential_spend(&[token_ix::TRANSFER]).is_ok());
+    }
+
+    #[test]
+    fn bound_path_requires_the_exact_context_account_transfer_layout() {
+        let mut data = vec![0u8; 169];
+        data[0] = token_ix::CONFIDENTIAL_TRANSFER_EXTENSION;
+        data[1] = confidential_ix::TRANSFER;
+        assert!(require_bound_confidential_transfer(&data).is_ok());
+        data[167] = 1;
+        assert!(require_bound_confidential_transfer(&data).is_err());
+        data[167] = 0;
+        data[1] = confidential_ix::TRANSFER_WITH_FEE;
+        assert!(require_bound_confidential_transfer(&data).is_err());
     }
 }

@@ -3,7 +3,7 @@ use anchor_lang::solana_program::instruction::{AccountMeta, Instruction};
 use anchor_lang::solana_program::program::invoke_signed;
 
 use crate::{
-    custody_guard::{classify_cpi, CpiKind},
+    custody_guard::{classify_cpi, require_non_confidential_spend, CpiKind},
     error::PolicyError,
     instructions::authorize::apply_policy_check,
     state::Policy,
@@ -55,6 +55,7 @@ pub fn handle_authorize_and_invoke(
 ) -> Result<()> {
     let kind = classify_cpi(ctx.accounts.target_program.key, &instruction_data)?;
     require!(kind == CpiKind::Spend, PolicyError::NotASpendInstruction);
+    require_non_confidential_spend(&instruction_data)?;
     require_custodied_source(&ctx.accounts.policy, ctx.remaining_accounts)?;
 
     apply_policy_check(&mut ctx.accounts.policy, amount)?;

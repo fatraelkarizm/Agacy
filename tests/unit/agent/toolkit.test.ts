@@ -19,6 +19,7 @@ function contextFor(overrides: Partial<ToolContext> = {}): ToolContext {
     maxSpendSol: 0,
     effects: {
       payConfidentially: vi.fn().mockResolvedValue({ signature: "sig" }),
+      readOnChainPolicy: vi.fn().mockResolvedValue(null),
       requestDevnetAirdrop: vi.fn().mockResolvedValue({ signature: "sig" }),
       fetchTokenPrice: vi.fn().mockResolvedValue({ mint: "mint", priceUsd: 1 }),
       fetchSwapQuote: vi.fn().mockResolvedValue({ inAmount: "1", outAmount: "1", priceImpactPct: null }),

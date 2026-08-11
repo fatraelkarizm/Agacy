@@ -4,6 +4,8 @@
 
 Built for NTU InnovateX Hackathon 2026 (NTU CCTF x SNZ).
 
+![Agacy privacy flow: ordinary public agent wallet compared with amount-bound confidential execution](public/agacy-privacy-compare-flow.svg)
+
 ## Project Overview
 
 ### The problem
@@ -52,6 +54,9 @@ combines three things, only one of which is a Solana primitive:
 - A custody model proven on live devnet to move real value through a real confidential transfer the
   program itself signs, to reject an over-limit one, and to hand the account back to its owner on
   demand.
+- Cryptographic amount binding: the policy reconstructs the transfer amount ciphertext from the
+  exact Token-2022 validity-proof context consumed by the transfer. A live `claim 1 / transfer 25`
+  attack is rejected on devnet while the vendor balance stays zero.
 - Encrypted agent reasoning, carried on-chain and verified absent from the raw transaction bytes.
 - A public/authorized view split enforced by the type system, not a UI toggle — a public view is
   structurally incapable of holding a decrypted amount.
@@ -178,9 +183,11 @@ That is a serious amount of power to hand a program, and the honest part is what
   change-of-ownership instruction and taken the account outright, permanently. Everything the
   program can sign is now on an explicit allowlist.
 
-What this still does **not** close: the program cannot decrypt a transfer to confirm the amount it
-was told about is the amount that actually moves. It bounds what kind of action can happen, not the
-value inside an encrypted one.
+The program never trusts a separate amount claim for confidential payments. It reads the source
+handle from Token-2022's verifier-owned transfer-validity context, reconstructs
+`Enc(low + 2^16 * high)`, checks the encrypted limits against that exact ciphertext, and then makes
+Token-2022 consume the same context account. The plaintext path refuses confidential-transfer
+payloads entirely, so it cannot be used as a legacy bypass.
 
 ### A limit the program itself cannot read
 

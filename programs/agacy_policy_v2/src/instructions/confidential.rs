@@ -2,10 +2,11 @@ use anchor_lang::prelude::*;
 
 use crate::{
     confidential_limits::{
-        add_ciphertexts, read_equality_context, require_equality_over, subtract_ciphertexts,
-        verify_range_context, CiphertextBytes, ENCRYPTED_ZERO,
+        add_ciphertexts, read_equality_context, read_transfer_amount_ciphertext,
+        require_equality_over, subtract_ciphertexts, verify_range_context, CiphertextBytes,
+        ENCRYPTED_ZERO,
     },
-    custody_guard::{classify_cpi, CpiKind},
+    custody_guard::{classify_cpi, require_bound_confidential_transfer, CpiKind},
     error::PolicyError,
     instructions::authorize_and_invoke::{forward_as_policy_pda, require_custodied_source},
     state::Policy,
@@ -103,18 +104,38 @@ pub struct AuthorizeConfidentialAndInvoke<'info> {
     pub period_equality_proof: UncheckedAccount<'info>,
     /// CHECK: see AuthorizeConfidential.
     pub range_proof: UncheckedAccount<'info>,
+    /// CHECK: Token-2022's verified transfer-validity context. Its owner, proof
+    /// type, source key, and forwarded-account position are checked below.
+    pub transfer_validity_proof: UncheckedAccount<'info>,
 }
 
 /// The confidential twin of `authorize_and_invoke`: same CPI allowlist, same
 /// custodied-source check, same PDA signing — only the budget test differs.
 pub fn handle_authorize_confidential_and_invoke(
     ctx: Context<AuthorizeConfidentialAndInvoke>,
-    amount_ct: CiphertextBytes,
     instruction_data: Vec<u8>,
 ) -> Result<()> {
     let kind = classify_cpi(ctx.accounts.target_program.key, &instruction_data)?;
     require!(kind == CpiKind::Spend, PolicyError::NotASpendInstruction);
+    require_bound_confidential_transfer(&instruction_data)?;
     require_custodied_source(&ctx.accounts.policy, ctx.remaining_accounts)?;
+
+    // With all proof offsets zero, Token-2022 omits the optional instructions
+    // sysvar and ConfidentialTransfer account #4 is the validity record.
+    // Matching it here binds our amount to the proof consumed by the CPI.
+    let forwarded_validity = ctx
+        .remaining_accounts
+        .get(4)
+        .ok_or(PolicyError::MissingCpiAccounts)?;
+    require_keys_eq!(
+        forwarded_validity.key(),
+        ctx.accounts.transfer_validity_proof.key(),
+        PolicyError::TransferProofAccountMismatch
+    );
+    let amount_ct = read_transfer_amount_ciphertext(
+        &ctx.accounts.transfer_validity_proof,
+        &ctx.accounts.policy.limit_pubkey,
+    )?;
 
     apply_confidential_check(
         &mut ctx.accounts.policy,

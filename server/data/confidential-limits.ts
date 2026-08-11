@@ -107,6 +107,7 @@ export function buildConfidentialAuthorization(
   state: ConfidentialLimitState,
   values: ConfidentialLimitValues,
   amount: bigint,
+  boundAmountCiphertext?: Uint8Array,
 ): ConfidentialAuthorization {
   const transferDifference = values.maxPerTransfer - amount;
   const periodDifference = values.maxPerPeriod - (values.spentInPeriod + amount);
@@ -130,7 +131,9 @@ export function buildConfidentialAuthorization(
     }
   }
 
-  const amountCiphertextObject = keypair.pubkey().encryptU64(amount);
+  const amountCiphertextObject = boundAmountCiphertext
+    ? ciphertextFrom(boundAmountCiphertext)
+    : keypair.pubkey().encryptU64(amount);
   const amountCiphertext = amountCiphertextObject.toBytes();
 
   // Recomputed here exactly as the program recomputes it on-chain. If these two
