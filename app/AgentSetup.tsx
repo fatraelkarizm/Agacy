@@ -189,7 +189,10 @@ export function AgentSetup({
             </div>
             <p className="privacy-scope-note">
               Current devnet mode hides amounts and balances. Address unlinkability belongs to the
-              planned shielded execution layer and is not claimed here.
+              planned shielded execution layer and is not claimed here. The per-transfer and
+              per-period limits themselves are stored in plaintext on-chain in this build regardless
+              of the choice above — see docs/PRIVACY_ARCHITECTURE.md for the encrypted-limits path
+              proven on devnet via the CLI verification scripts.
             </p>
           </div>
         )}
