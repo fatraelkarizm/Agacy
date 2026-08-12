@@ -99,6 +99,35 @@ between an AI agent's decisions and the owner's funds**.
 | **Web3 protocols and agent platforms** | Keeper costs, data feeds, compute, settlement, and agent-to-agent services | An always-on agent needs machine-speed payments, but the protocol still needs cryptographic limits and an owner-readable audit trail. |
 | **Individual power users** | Subscriptions, trading tools, data purchases, and personal automation | They want delegation without publishing a permanent financial profile or giving a model unlimited authority. |
 
+### Market size
+
+| | Size today | What it means for Agacy |
+|---|---|---|
+| **TAM** — all AI-agent-initiated value movement | AI agent market projected to reach **US$52.62B by 2030**, with **79% of organizations** already reporting some AI agent adoption | Every one of those agents that touches money eventually needs an authority boundary. That boundary is the product, independent of which chain or app the agent runs on. |
+| **SAM** — on-chain agent payments specifically | Stablecoin transaction volume hit **US$33T in 2025**; DAOs alone hold **US$21–24.5B** in on-chain treasury assets across **13,000+ organizations** | This is the addressable slice where a wallet-level, on-chain-enforced policy is possible at all — it needs programmable money, which is what Agacy is built on. |
+| **SOM — Stage 1** | Agent-initiated payments are still **~0.0001%** of stablecoin volume today | The category is early, not proven at scale — which is the argument for building the trust and privacy layer now, before volume arrives, rather than retrofitting it after an incident. |
+
+Read together: the market Agacy targets is not speculative in size (DAO treasuries and stablecoin
+settlement already move tens of billions), but agent-initiated spend inside it is still near zero —
+so the opportunity is to be the default policy layer before that curve bends up, not to compete for
+share of an already-saturated one. See sources in the evidence table below.
+
+### External evidence for the problem
+
+Agacy's two starting claims — "agent spending is becoming real money" and "a prompt-level spend
+limit is not a security boundary" — are not internal assumptions. Both are documented independently:
+
+| Claim | External evidence | Source |
+|---|---|---|
+| Prompt-level spend limits fail under adversarial input, not just in theory | An attacker sent a Morse-code prompt injection to the Grok/Bankrbot agent on X and moved 3B DRB tokens (~US$150K–200K) out of a linked wallet — no private key stolen, no contract exploited, just a system-prompt instruction talked around | [OECD.AI incident record](https://oecd.ai/en/incidents/2026-05-04-4a73) · [SecurityWeek](https://www.securityweek.com/prompt-injection-attacks-trick-ai-agents-into-making-crypto-payments/) · [Giskard](https://www.giskard.ai/knowledge/how-grok-got-prompt-injected-an-x-user-drained-150-000-from-an-ai-wallet) |
+| Public on-chain payment history is a real institutional blocker, not a hypothetical preference | Public transparency exposes salary, vendor pricing, and treasury runway to competitors; this is cited as a specific reason traditional companies and B2B payment operators avoid transacting on fully public chains | [Fireblocks — The Blockchain Privacy Problem](https://www.fireblocks.com/blog/blockchain-privacy-problem) · [Outlook India — Transparency in DAO Treasuries](https://www.outlookindia.com/xhub/blockchain-insights/transparency-in-dao-treasuries-the-role-of-on-chain-tracking-and-public-financial-reporting) |
+| The treasury-operator user segment is a real, sizeable market, not a hackathon persona | 13,000+ DAOs collectively manage roughly US$21–24.5B in liquid treasury assets today | [Nevermined — Agent-to-Agent Payment Statistics](https://nevermined.ai/blog/agent-to-agent-payment-statistics) |
+| Agents making autonomous payments is an early but accelerating category, matching Agacy's "get the trust layer right before volume arrives" framing | 79% of organizations report having adopted AI agents, in a market projected to reach US$52.62B by 2030; total stablecoin volume was US$33T in 2025, but agent-initiated payment activity is still ~0.0001% of it — early enough that the control layer isn't a solved problem yet | [Nevermined — Agent-to-Agent Payment Statistics](https://nevermined.ai/blog/agent-to-agent-payment-statistics) |
+
+These are cited as directional market context, not project-specific validation — Agacy has not yet
+run a pilot with a named DAO, SME, or protocol. That remaining gap is the weakest part of the
+Real-World Impact case and the next thing worth closing.
+
 ### Scale path
 
 Agacy starts with a narrow, high-value workflow: **a procurement or treasury agent making bounded
@@ -271,30 +300,6 @@ npm run build
 
 The standalone autonomous devnet flow is available through `npm run agent`. It provisions a fresh
 confidential environment and lets the model choose tools against real devnet state.
-
-## 👤 Team Details
-
-| Member | Role | Affiliation |
-|---|---|---|
-| [Fatra Al Khawarizmi](https://github.com/fatraelkarizm) | Project Lead · Product · Full-stack, AI Agent and Solana Engineering | Universitas Pendidikan Indonesia |
-
-- **Team:** Agacy
-- **Team type:** Student Group
-- **Location:** Bandung, Indonesia
-- **Student verification:** proof of current enrollment should be uploaded privately through the
-  Devpost submission, not committed to this public repository.
-
-## 🏆 InnovateX Judging Fit
-
-| Official criterion | Weight | Agacy's evidence |
-|---|:---:|---|
-| Technical Quality | **30%** | Working devnet program, confidential transfers, adversarial verification, typed privacy boundary, automated tests |
-| Real-World Impact | **25%** | Safe delegation for treasury, procurement, protocol, and personal payment agents |
-| Innovation | **20%** | Confidential agent intent plus encrypted, on-chain-enforced spending limits |
-| Demo and Presentation | **15%** | One visual execution graph and a side-by-side public/owner privacy reveal |
-| Track Relevance | **10%** | Autonomous, user-facing Web3 agent infrastructure solving a concrete financial-control problem |
-
-Criteria source: [NTU InnovateX Hackathon 2026 on Devpost](https://ntu-cctf-snz-innovatex-2026.devpost.com/).
 
 ## 🧭 Deliberate Hackathon Scope
 
