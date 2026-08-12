@@ -420,7 +420,7 @@ function PublicTransactionRegistry({
             <tbody>
               {transactions.map((transaction) => (
                 <tr key={transaction.signature}>
-                  <td><code>{shortSignature(transaction.signature)}</code></td>
+                  <td><TxHashCell signature={transaction.signature} /></td>
                   <td>Transfer</td>
                   <td><span className="dashboard-hidden-value">•••••••••• USDC</span></td>
                   <td><span className="dashboard-private"><LockKey aria-hidden="true" size={15} /> Confidential</span></td>
@@ -478,7 +478,7 @@ function AuthorizedTransactionRegistry({ transactions }: { transactions: readonl
             <tbody>
               {transactions.map((transaction) => (
                 <tr key={transaction.signature}>
-                  <td><code>{shortSignature(transaction.signature)}</code></td>
+                  <td><TxHashCell signature={transaction.signature} /></td>
                   <td className="dashboard-owner-value">{formatTokens(transaction.amount)} USDC</td>
                   <td><code>{shortAddress(transaction.counterparty)}</code></td>
                   <td>{formatTokens(transaction.resultingBalance)} USDC</td>
@@ -676,6 +676,26 @@ function shortAddress(address: string): string {
 
 function shortSignature(signature: string): string {
   return `${signature.slice(0, 4)}...${signature.slice(-4)}`;
+}
+
+/** Real devnet signatures are 87-88 base58 chars; the local-only demo fallback is 44. */
+function explorerTxUrl(signature: string): string | null {
+  return signature.length > 44
+    ? `https://explorer.solana.com/tx/${signature}?cluster=devnet`
+    : null;
+}
+
+/**
+ * Real signatures link out to devnet so the claim is checkable, not just stated.
+ * The 44-char placeholder used before any run has happened is intentionally not
+ * a link — it does not correspond to a real transaction and should not look like one.
+ */
+function TxHashCell({ signature }: { signature: string }) {
+  const url = explorerTxUrl(signature);
+  const code = <code>{shortSignature(signature)}</code>;
+  return url
+    ? <a href={url} target="_blank" rel="noreferrer" title="View on Solana Explorer (devnet)">{code}</a>
+    : code;
 }
 
 function humanize(value: string): string {

@@ -103,7 +103,14 @@ export function runScenario(steps: readonly ScenarioStep[] = SCENARIO): Scenario
   };
 }
 
-/** Maps the live local agent trace into the same owner-only DTO used by transaction views. */
+/**
+ * Maps the live local agent trace into the same owner-only DTO used by transaction views.
+ *
+ * Uses the execution's real devnet `authorize` signature when the run produced one, so
+ * anything shown in the dashboard can be pasted into an explorer and actually resolve.
+ * `fakeSignature` is a fallback only for callers that never touched a chain (e.g. the
+ * static `runScenario` walkthrough), not a substitute for a signature that exists.
+ */
 export function buildAuthorizedDemoHistory(
   executions: readonly AgentExecutionDTO[],
   startingBalance = STARTING_BALANCE,
@@ -114,7 +121,7 @@ export function buildAuthorizedDemoHistory(
   return executions.map((execution, index) => {
     balance -= execution.amount;
     return {
-      signature: fakeSignature(index, "runtime"),
+      signature: execution.signature ?? fakeSignature(index, "runtime"),
       timestamp: firstTimestamp + index * 60_000,
       status: "confirmed",
       confidential: true,

@@ -358,7 +358,12 @@ export default function DashboardPage() {
           if (outcome.status === "authorized") {
             setExecuted((prev) => [
               ...prev,
-              { amount: task.amount, recipient: task.recipient, reasoning: task.reasoning },
+              {
+                amount: task.amount,
+                recipient: task.recipient,
+                reasoning: task.reasoning,
+                signature: outcome.signature,
+              },
             ]);
           }
         },

@@ -61,6 +61,8 @@ export interface AgentExecutionDTO {
   readonly amount: bigint;
   readonly recipient: string;
   readonly reasoning: string;
+  /** The real devnet `authorize` signature, when this execution came from an on-chain run. */
+  readonly signature?: string;
 }
 
 /**
