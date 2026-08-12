@@ -10,6 +10,27 @@ export const agentGraphNodeKindSchema = z.enum([
   "blocked",
 ]);
 
+export const agentGraphToolNameSchema = z.enum([
+  "get_wallet_overview",
+  "check_on_chain_policy",
+  "authorize_policy_spend",
+]);
+
+export const agentGraphToolCallSchema = z.discriminatedUnion("name", [
+  z.object({
+    name: z.enum(["get_wallet_overview", "check_on_chain_policy"]),
+    input: z.object({}).strict(),
+  }),
+  z.object({
+    name: z.literal("authorize_policy_spend"),
+    input: z.object({
+      amountTokens: z.number().positive().max(1_000_000_000),
+      recipient: z.string().trim().min(32).max(64),
+      reasoning: z.string().trim().min(1).max(220),
+    }),
+  }),
+]);
+
 export const agentGraphExpansionRequestSchema = z.object({
   goal: z.string().trim().min(1).max(2_000),
   parent: z.object({
@@ -19,6 +40,7 @@ export const agentGraphExpansionRequestSchema = z.object({
   }),
   depth: z.number().int().min(0).max(4),
   lineage: z.array(z.string().trim().min(1).max(80)).max(5),
+  availableTools: z.array(agentGraphToolNameSchema).max(3),
 });
 
 export const agentGraphExpansionSchema = z.object({
@@ -27,5 +49,22 @@ export const agentGraphExpansionSchema = z.object({
     detail: z.string().trim().min(1).max(220),
     kind: agentGraphNodeKindSchema,
     expand: z.boolean(),
+    toolCall: agentGraphToolCallSchema.optional(),
+  })).min(1).max(4),
+});
+
+/** Flat wire shape for providers that do not reliably support nested JSON-schema unions. */
+export const agentGraphModelExpansionSchema = z.object({
+  children: z.array(z.object({
+    label: z.string(),
+    detail: z.string(),
+    kind: agentGraphNodeKindSchema,
+    expand: z.boolean(),
+    toolName: agentGraphToolNameSchema.optional(),
+    toolInput: z.object({
+      amountTokens: z.number().optional(),
+      recipient: z.string().optional(),
+      reasoning: z.string().optional(),
+    }).optional(),
   })).min(1).max(4),
 });

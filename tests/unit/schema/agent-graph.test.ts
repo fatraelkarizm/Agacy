@@ -2,9 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   agentGraphExpansionRequestSchema,
   agentGraphExpansionSchema,
+  agentGraphToolCallSchema,
 } from "../../../server/schema/agent-graph.schema";
 
 describe("agent graph schemas", () => {
+  it("accepts a bounded request with an explicit tool allow-list", () => {
+    expect(agentGraphExpansionRequestSchema.safeParse({
+      goal: "Inspect the wallet.",
+      parent: { label: "Inspect", detail: "Inspect the wallet.", kind: "agent" },
+      depth: 0,
+      lineage: ["Inspect"],
+      availableTools: ["get_wallet_overview"],
+    }).success).toBe(true);
+  });
+
   it("accepts a bounded recursive expansion", () => {
     expect(agentGraphExpansionSchema.safeParse({
       children: [{
@@ -25,5 +36,20 @@ describe("agent graph schemas", () => {
     };
 
     expect(agentGraphExpansionRequestSchema.safeParse(request).success).toBe(false);
+  });
+
+  it("accepts only registered structured tool calls", () => {
+    expect(agentGraphToolCallSchema.safeParse({
+      name: "authorize_policy_spend",
+      input: {
+        amountTokens: 4.25,
+        recipient: "Sub1er4kQmVnH8dGpXwYzR3tNc5bVfJ2sLmQ9pDhK",
+        reasoning: "Renew the owner-approved subscription.",
+      },
+    }).success).toBe(true);
+    expect(agentGraphToolCallSchema.safeParse({
+      name: "run_arbitrary_command",
+      input: {},
+    }).success).toBe(false);
   });
 });

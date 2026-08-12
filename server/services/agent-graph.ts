@@ -1,10 +1,16 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import { generateObject, NoObjectGeneratedError } from "ai";
 import type {
+  AgentGraphChildDTO,
   AgentGraphExpansionDTO,
   AgentGraphExpansionRequestDTO,
+  AgentGraphToolName,
 } from "../dto/agent-graph.dto";
-import { agentGraphExpansionSchema } from "../schema/agent-graph.schema";
+import {
+  agentGraphExpansionSchema,
+  agentGraphModelExpansionSchema,
+  agentGraphToolCallSchema,
+} from "../schema/agent-graph.schema";
 
 const DEFAULT_MODEL = "gpt-4o-mini";
 const NODE_KINDS = new Set([
@@ -16,6 +22,14 @@ const NODE_KINDS = new Set([
   "complete",
   "blocked",
 ]);
+const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
+  get_wallet_overview:
+    "Read the connected owner's local Agacy wallet and policy overview. Input must be {}. Read-only.",
+  check_on_chain_policy:
+    "Read the provisioned policy account from Solana devnet. Input must be {}. Read-only.",
+  authorize_policy_spend:
+    "Ask the deployed policy program to authorize a spend on devnet. Input: amountTokens, recipient, reasoning. This proves policy authorization only; it does not transfer tokens.",
+};
 
 export async function expandAgentGraph(
   input: AgentGraphExpansionRequestDTO,
@@ -31,8 +45,11 @@ export async function expandAgentGraph(
   try {
     const result = await generateObject({
       model: openai(process.env["LLM_MODEL"] ?? DEFAULT_MODEL),
-      schema: agentGraphExpansionSchema,
+      schema: agentGraphModelExpansionSchema,
       temperature: 0.25,
+      maxTokens: 1_200,
+      maxRetries: 1,
+      abortSignal: AbortSignal.timeout(30_000),
       system: [
         "You expand one node in a generic autonomous-agent execution graph.",
         "Break the current node into the smallest useful next observations, reasoning steps, tool calls, policy checks, or results.",
@@ -41,6 +58,10 @@ export async function expandAgentGraph(
           ? "This is the final depth. Every child must have expand=false and end as complete, blocked, or a factual result."
           : "Set expand=true only when that child genuinely needs more work.",
         "Never claim an external action happened unless the lineage includes a real tool result proving it.",
+        "When a listed tool is needed, emit kind=tool with its exact toolName and toolInput, then set expand=false. The runtime will validate and execute it before adding a factual result node.",
+        "Never invent a toolName. authorize_policy_spend is not a token transfer and must never be described as payment completion.",
+        "Only call authorize_policy_spend when the owner goal explicitly supplies the amount and recipient; never invent either value.",
+        "When currentNode contains verified tool observations, treat those reads as complete. Continue reasoning from the observation; do not request the same tool again or mark the completed read as unavailable.",
         "If the goal needs a capability that is not present, emit a blocked node naming the missing capability.",
         "Keep labels short and details factual. Do not expose hidden chain-of-thought; provide concise action summaries only.",
       ].join("\n"),
@@ -49,26 +70,29 @@ export async function expandAgentGraph(
         currentNode: input.parent,
         lineage: input.lineage,
         depth: input.depth,
-        availableCapabilities: [
-          "reason about the supplied goal",
-          "inspect the Agacy session and policy",
-          "propose a policy-gated Solana action",
-          "request installed tools",
-        ],
+        availableCapabilities: ["reason about the supplied goal"],
+        availableTools: input.availableTools.map((name) => ({
+          name,
+          description: TOOL_DESCRIPTIONS[name],
+        })),
       }),
     });
 
-    return result.object;
+    return normalizeExpansion(toExpansion(result.object.children), finalDepth, input.availableTools);
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error) && error.text) {
-      const recovered = recoverExpansion(error.text, finalDepth);
+      const recovered = recoverExpansion(error.text, finalDepth, input.availableTools);
       if (recovered) return recovered;
     }
     throw error;
   }
 }
 
-function recoverExpansion(text: string, finalDepth: boolean): AgentGraphExpansionDTO | null {
+function recoverExpansion(
+  text: string,
+  finalDepth: boolean,
+  availableTools: readonly AgentGraphToolName[],
+): AgentGraphExpansionDTO | null {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
   if (start < 0 || end <= start) return null;
@@ -87,19 +111,83 @@ function recoverExpansion(text: string, finalDepth: boolean): AgentGraphExpansio
         : "reason";
       const expand = !finalDepth && value["expand"] === true && expandable < 2;
       if (expand) expandable += 1;
+      const toolCall = parseToolCall(value);
       return [{
         label: cleanText(value["label"], 54),
         detail: cleanText(value["detail"], 220),
         kind,
         expand,
+        ...(toolCall.success ? { toolCall: toolCall.data } : {}),
       }];
     });
 
     const parsed = agentGraphExpansionSchema.safeParse({ children });
-    return parsed.success ? parsed.data : null;
+    return parsed.success ? normalizeExpansion(parsed.data, finalDepth, availableTools) : null;
   } catch {
     return null;
   }
+}
+
+function toExpansion(
+  children: ReadonlyArray<{
+    readonly label: string;
+    readonly detail: string;
+    readonly kind: AgentGraphChildDTO["kind"];
+    readonly expand: boolean;
+    readonly toolName?: AgentGraphToolName;
+    readonly toolInput?: Record<string, unknown>;
+  }>,
+): AgentGraphExpansionDTO {
+  return {
+    children: children.map((child) => {
+      const toolCall = agentGraphToolCallSchema.safeParse({
+        name: child.toolName,
+        input: child.toolInput ?? {},
+      });
+      return {
+        label: cleanText(child.label, 54),
+        detail: cleanText(child.detail, 220),
+        kind: child.kind,
+        expand: child.expand,
+        ...(toolCall.success ? { toolCall: toolCall.data } : {}),
+      };
+    }),
+  };
+}
+
+function parseToolCall(value: Record<string, unknown>) {
+  const nested = agentGraphToolCallSchema.safeParse(value["toolCall"]);
+  if (nested.success) return nested;
+  return agentGraphToolCallSchema.safeParse({
+    name: value["toolName"],
+    input: isRecord(value["toolInput"]) ? value["toolInput"] : {},
+  });
+}
+
+function normalizeExpansion(
+  expansion: AgentGraphExpansionDTO,
+  finalDepth: boolean,
+  availableTools: readonly AgentGraphToolName[],
+): AgentGraphExpansionDTO {
+  let expandable = 0;
+  return {
+    children: expansion.children.map((child): AgentGraphChildDTO => {
+      if (child.kind === "tool") {
+        if (!child.toolCall || !availableTools.includes(child.toolCall.name)) {
+          return {
+            label: child.label,
+            detail: "The required tool is not available in this owner session.",
+            kind: "blocked",
+            expand: false,
+          };
+        }
+        return { ...child, expand: false };
+      }
+      const expand = !finalDepth && child.expand && expandable < 2;
+      if (expand) expandable += 1;
+      return { ...child, expand, toolCall: undefined };
+    }),
+  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

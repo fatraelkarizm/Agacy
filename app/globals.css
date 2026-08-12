@@ -1265,9 +1265,9 @@ button.primary:hover:not(:disabled) {
 }
 
 .agent-canvas-node:hover .agent-canvas-node-label,
-.agent-canvas-node.selected .agent-canvas-node-label,
 .agent-canvas-node-running .agent-canvas-node-label,
 .agent-canvas-node-blocked .agent-canvas-node-label { opacity: 1; }
+.agent-canvas-node.selected .agent-canvas-node-label { opacity: 0; }
 .agent-canvas-node.edge-right .agent-canvas-node-label { left: auto; right: 27px; text-align: right; }
 
 .agent-canvas-detail {

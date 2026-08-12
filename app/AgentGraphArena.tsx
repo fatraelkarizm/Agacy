@@ -10,9 +10,12 @@ import {
 } from "react";
 import { PaperPlaneTilt } from "@phosphor-icons/react";
 import type {
+  AgentGraphToolCallDTO,
+  AgentGraphToolName,
   AgentGraphChildDTO,
   AgentGraphExpansionDTO,
   AgentGraphNodeKind,
+  AuthorizedAgentGraphToolResultDTO,
 } from "../server/dto/agent-graph.dto";
 
 type CanvasNodeKind = AgentGraphNodeKind | "goal";
@@ -21,8 +24,10 @@ type CanvasNodeStatus = "queued" | "running" | "done" | "blocked";
 interface CanvasNode {
   readonly id: string;
   readonly parentId: string;
+  readonly parentIds?: readonly string[];
   readonly label: string;
   readonly detail: string;
+  readonly modelDetail?: string;
   readonly kind: CanvasNodeKind;
   readonly depth: number;
   readonly x: number;
@@ -30,6 +35,7 @@ interface CanvasNode {
   readonly angle: number;
   readonly expand: boolean;
   readonly status: CanvasNodeStatus;
+  readonly toolCall?: AgentGraphToolCallDTO;
 }
 
 interface QueueItem {
@@ -39,13 +45,18 @@ interface QueueItem {
 
 interface AgentGraphArenaProps {
   readonly onExit: () => void;
+  readonly availableTools: readonly AgentGraphToolName[];
+  readonly onToolCall: (
+    call: AgentGraphToolCallDTO,
+    ownerGoal: string,
+  ) => Promise<AuthorizedAgentGraphToolResultDTO>;
 }
 
 const MAX_EXPANSION_REQUESTS = 8;
 const MAX_NODES_PER_RUN = 36;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 
-export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
+export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGraphArenaProps) {
   const [nodes, setNodes] = useState<CanvasNode[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [command, setCommand] = useState("");
@@ -85,7 +96,7 @@ export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
 
     const runId = ++runIdRef.current;
     const rootIndex = nodes.filter((node) => node.kind === "goal").length;
-    const angle = -Math.PI / 2 + rootIndex * GOLDEN_ANGLE;
+    const angle = rootIndex * GOLDEN_ANGLE;
     const root = makeGoalNode(goal, angle);
 
     setNodes((current) => [...current, root]);
@@ -101,6 +112,8 @@ export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
 
   const growGraph = async (root: CanvasNode, goal: string, runId: number) => {
     const queue: QueueItem[] = [{ node: root, lineage: [root.label] }];
+    const executedToolCalls = new Set<string>();
+    const completedReadTools = new Set<AgentGraphToolName>();
     let requests = 0;
     let created = 0;
 
@@ -125,11 +138,13 @@ export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
             goal,
             parent: {
               label: item.node.label,
-              detail: item.node.detail,
+              detail: item.node.modelDetail ?? item.node.detail,
               kind: item.node.kind === "goal" ? "agent" : item.node.kind,
             },
             depth: item.node.depth,
             lineage: item.lineage,
+            availableTools: availableTools.filter((tool) =>
+              tool === "authorize_policy_spend" || !completedReadTools.has(tool)),
           }),
         });
         const payload = await response.json() as AgentGraphExpansionDTO | { error: string };
@@ -148,9 +163,55 @@ export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
           ...children,
         ]);
 
+        const hasToolCalls = children.some((child) => child.toolCall);
+        const toolResults: Array<{
+          node: CanvasNode;
+          result: AuthorizedAgentGraphToolResultDTO;
+        }> = [];
         for (const child of children) {
-          if (child.expand && child.depth < 4) {
+          if (child.toolCall) {
+            if (created >= MAX_NODES_PER_RUN) break;
+            const fingerprint = JSON.stringify(child.toolCall);
+            const toolResult = executedToolCalls.has(fingerprint)
+              ? duplicateToolResult(child.toolCall)
+              : await executeTool(child, child.toolCall, goal);
+            executedToolCalls.add(fingerprint);
+            if (child.toolCall.name !== "authorize_policy_spend") {
+              completedReadTools.add(child.toolCall.name);
+            }
+            if (runIdRef.current !== runId) return;
+
+            const resultNode = makeToolResultNode(child, toolResult);
+            created += 1;
+            setNodes((current) => [
+              ...current.map((node) => node.id === child.id
+                ? { ...node, status: toolResult.status === "succeeded" ? "done" as const : "blocked" as const }
+                : node),
+              resultNode,
+            ]);
+            setSelectedId(resultNode.id);
+            setAnnouncement(resultNode.label);
+            toolResults.push({ node: resultNode, result: toolResult });
+            continue;
+          }
+          if (!hasToolCalls && child.expand && child.depth < 4) {
             queue.push({ node: child, lineage: [...item.lineage, child.label] });
+          }
+        }
+
+        if (toolResults.length > 0 && created < MAX_NODES_PER_RUN) {
+          const observation = makeToolObservationNode(toolResults);
+          created += 1;
+          setNodes((current) => [...current, observation]);
+          setSelectedId(observation.id);
+          if (
+            observation.depth < 4 &&
+            toolResults.some(({ result }) => result.status !== "blocked" && result.status !== "failed")
+          ) {
+            queue.push({
+              node: observation,
+              lineage: [...item.lineage, observation.label],
+            });
           }
         }
       } catch (error) {
@@ -169,6 +230,13 @@ export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
     }
   };
 
+  const executeTool = async (node: CanvasNode, call: AgentGraphToolCallDTO, ownerGoal: string) => {
+    updateNode(node.id, { status: "running" });
+    setSelectedId(node.id);
+    setAnnouncement(`Executing ${call.name}`);
+    return onToolCall(call, ownerGoal);
+  };
+
   const updateNode = (id: string, patch: Partial<Pick<CanvasNode, "status">>) => {
     setNodes((current) => current.map((node) => node.id === id ? { ...node, ...patch } : node));
   };
@@ -184,22 +252,21 @@ export function AgentGraphArena({ onExit }: AgentGraphArenaProps) {
       }}
     >
       <svg className="agent-canvas-edges" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-        {nodes.map((node) => {
-          const parent = node.parentId === "agent-core"
+        {nodes.flatMap((node) => (node.parentIds ?? [node.parentId]).flatMap((parentId) => {
+          const parent = parentId === "agent-core"
             ? { x: 50, y: 50 }
-            : nodes.find((candidate) => candidate.id === node.parentId);
-          if (!parent) return null;
-          return (
+            : nodes.find((candidate) => candidate.id === parentId);
+          return parent ? [(
             <line
               className={`agent-canvas-edge agent-canvas-edge-${node.status}`}
-              key={`edge-${node.id}`}
+              key={`edge-${parentId}-${node.id}`}
               x1={parent.x}
               y1={parent.y}
               x2={node.x}
               y2={node.y}
             />
-          );
-        })}
+          )] : [];
+        }))}
       </svg>
 
       <button
@@ -299,15 +366,73 @@ function placeChildren(parent: CanvasNode, children: readonly AgentGraphChildDTO
       parentId: parent.id,
       label: child.label,
       detail: child.detail,
+      toolCall: child.toolCall,
       kind: child.kind,
       depth,
       x: clamp(parent.x + Math.cos(angle) * distance, 3, 97),
       y: clamp(parent.y + Math.sin(angle) * distance * 1.55, 4, 96),
       angle,
       expand: child.expand && depth < 4 && child.kind !== "blocked" && child.kind !== "complete",
-      status: child.kind === "blocked" ? "blocked" : child.expand ? "queued" : "done",
+      status: child.kind === "blocked" ? "blocked" : child.toolCall || child.expand ? "queued" : "done",
     };
   });
+}
+
+function makeToolResultNode(
+  parent: CanvasNode,
+  result: AuthorizedAgentGraphToolResultDTO,
+): CanvasNode {
+  const angle = parent.angle + (hashText(result.tool) % 2 === 0 ? 0.3 : -0.3);
+  const succeeded = result.status === "succeeded";
+  return {
+    id: crypto.randomUUID(),
+    parentId: parent.id,
+    label: succeeded ? "Tool result" : result.status === "refused" ? "Policy refused" : "Tool blocked",
+    detail: result.summary,
+    modelDetail: result.modelSummary,
+    kind: succeeded || result.status === "refused" ? "result" : "blocked",
+    depth: parent.depth + 1,
+    x: clamp(parent.x + Math.cos(angle) * 8, 3, 97),
+    y: clamp(parent.y + Math.sin(angle) * 12, 4, 96),
+    angle,
+    expand: false,
+    status: succeeded ? "done" : "blocked",
+  };
+}
+
+function makeToolObservationNode(
+  tools: ReadonlyArray<{
+    readonly node: CanvasNode;
+    readonly result: AuthorizedAgentGraphToolResultDTO;
+  }>,
+): CanvasNode {
+  const x = tools.reduce((sum, item) => sum + item.node.x, 0) / tools.length;
+  const y = tools.reduce((sum, item) => sum + item.node.y, 0) / tools.length;
+  const angle = tools[0]?.node.angle ?? 0;
+  return {
+    id: crypto.randomUUID(),
+    parentId: tools[0]?.node.id ?? "agent-core",
+    parentIds: tools.map((item) => item.node.id),
+    label: "Verified observations",
+    detail: `${tools.length} tool result${tools.length === 1 ? "" : "s"} collected. Continue from verified data.`,
+    modelDetail: tools.map((item) => item.result.modelSummary).join(" "),
+    kind: "observe",
+    depth: Math.max(...tools.map((item) => item.node.depth)) + 1,
+    x: clamp(x + Math.cos(angle) * 7, 3, 97),
+    y: clamp(y + Math.sin(angle) * 10, 4, 96),
+    angle,
+    expand: true,
+    status: "queued",
+  };
+}
+
+function duplicateToolResult(call: AgentGraphToolCallDTO): AuthorizedAgentGraphToolResultDTO {
+  return {
+    tool: call.name,
+    status: "blocked",
+    summary: "The same tool call already ran in this task, so the duplicate was blocked.",
+    modelSummary: "A duplicate tool call was blocked to prevent repeated side effects.",
+  };
 }
 
 function makeBlockedNode(parent: CanvasNode, detail: string): CanvasNode {

@@ -11,6 +11,7 @@ import type {
   SpendPolicyDTO,
 } from "../../server/dto/agent.dto";
 import type { AgentRunGraphEventDTO } from "../../server/dto/agent-run.dto";
+import type { AgentGraphToolCallDTO, AgentGraphToolName } from "../../server/dto/agent-graph.dto";
 import type { DashboardSection } from "../../server/dto/dashboard.dto";
 import { toPublicView } from "../../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../../server/dto/wallet.dto";
@@ -29,6 +30,7 @@ import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
 import { createAgentRunGoalEvent, runAgentOnChain } from "../../server/services/agent-run";
+import { executeAgentGraphTool } from "../../server/services/agent-graph-tools";
 import {
   ATTACKS,
   runAttack,
@@ -446,6 +448,20 @@ export default function DashboardPage() {
     [custodyAccount, ownerWallet, provisionedPolicy],
   );
 
+  const runGraphTool = useCallback(
+    (call: AgentGraphToolCallDTO, ownerGoal: string) => executeAgentGraphTool({
+      call,
+      ownerGoal,
+      client: devnetClient,
+      ownerAddress: ownerWallet?.address ?? "unavailable",
+      policy,
+      policyAccount: provisionedPolicy?.policyAccount ?? null,
+      agentSigner: agentSignerRef.current,
+      spentThisPeriod: executed.reduce((sum, item) => sum + item.amount, 0n),
+    }),
+    [executed, ownerWallet, policy, provisionedPolicy],
+  );
+
   if (checkingSession || !ownerWallet) {
     return (
       <div className="wrap step-page">
@@ -455,7 +471,18 @@ export default function DashboardPage() {
   }
 
   if (dashboardSection === "graph") {
-    return <AgentGraphArena onExit={() => setDashboardSection("overview")} />;
+    const availableTools: AgentGraphToolName[] = ["get_wallet_overview"];
+    if (provisionedPolicy) availableTools.push("check_on_chain_policy");
+    if (policy && provisionedPolicy && agentSignerRef.current) {
+      availableTools.push("authorize_policy_spend");
+    }
+    return (
+      <AgentGraphArena
+        availableTools={availableTools}
+        onToolCall={runGraphTool}
+        onExit={() => setDashboardSection("overview")}
+      />
+    );
   }
 
   const spent = executed.reduce((sum, e) => sum + e.amount, 0n);
