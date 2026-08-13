@@ -217,10 +217,18 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
           created += 1;
           setNodes((current) => [...current, observation]);
           setSelectedId(observation.id);
-          if (
-            observation.depth < 4 &&
-            toolResults.some(({ result }) => result.status !== "blocked" && result.status !== "failed")
-          ) {
+          // Every completed action continues the graph, including one that
+          // failed or was blocked. Stopping on failure contradicted the
+          // observation memory this run carries: refusals are recorded
+          // precisely so the model can adapt, and it can only do that if it
+          // gets another turn. A refusal is a fact to replan around ("that
+          // recipient is off-policy, so report back") rather than the end of
+          // the task.
+          //
+          // This cannot spin: the tool is removed from availableTools once it
+          // has run, identical calls are blocked by fingerprint, and the depth,
+          // request and node caps all still apply.
+          if (observation.depth < 4) {
             queue.push({
               node: observation,
               lineage: [...item.lineage, observation.label],
@@ -404,7 +412,13 @@ function makeToolResultNode(
     detail: result.summary,
     modelDetail: result.modelSummary,
     kind: succeeded || result.status === "refused" ? "result" : "blocked",
-    depth: parent.depth + 1,
+    // Shares its tool node's depth rather than sitting a level below it.
+    // `depth` gates how many more times the agent may plan, so it has to count
+    // planning rounds; a result node is the bookkeeping for a round that has
+    // already happened, not a new one. Charging it a level (and another for the
+    // observation) spent three of the four allowed levels per single round of
+    // tool use, which stopped the agent after two rounds with work still queued.
+    depth: parent.depth,
     x: clamp(parent.x + Math.cos(angle) * 8, 3, 97),
     y: clamp(parent.y + Math.sin(angle) * 12, 4, 96),
     angle,
@@ -430,7 +444,9 @@ function makeToolObservationNode(
     detail: `${tools.length} tool result${tools.length === 1 ? "" : "s"} collected. Continue from verified data.`,
     modelDetail: tools.map((item) => item.result.modelSummary).join(" "),
     kind: "observe",
-    depth: Math.max(...tools.map((item) => item.node.depth)) + 1,
+    // Same reasoning as makeToolResultNode: merging results is not itself a
+    // planning round. The round is charged when this node is expanded.
+    depth: Math.max(...tools.map((item) => item.node.depth)),
     x: clamp(x + Math.cos(angle) * 7, 3, 97),
     y: clamp(y + Math.sin(angle) * 10, 4, 96),
     angle,
