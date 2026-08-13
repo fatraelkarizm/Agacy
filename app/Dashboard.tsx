@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   ArrowSquareOut,
   Broadcast,
+  CheckCircle,
   Database,
   Eye,
   EyeSlash,
@@ -328,6 +329,13 @@ function AgentRegistry({
       />
       {agent ? (
         <div className="dashboard-agent-content">
+          {expanded && (
+            <div className="dashboard-agent-ready">
+              <span><CheckCircle aria-hidden="true" size={19} weight="fill" /><strong>Agent ready</strong></span>
+              <p>Review its policy below or choose it for a new graph run.</p>
+              <button onClick={onOpenGraph}>Choose in Agent Graph</button>
+            </div>
+          )}
           <div className="dashboard-table-wrap">
           <table className="dashboard-table">
             <thead><tr><th>Agent identifier</th><th>Status</th><th>Current task</th><th>Encrypted balance</th></tr></thead>

@@ -49,13 +49,15 @@ export function GraphStats({
 
   const done = nodes.filter((node) => node.status === "done").length;
   const blocked = nodes.filter((node) => node.status === "blocked").length;
+  const settled = done + blocked;
   // Counted on the tool node, not the result node. Both carry `toolResult`, so
   // counting either one alone is what keeps a single call from reading as two.
   const executedTools = nodes.filter(
     (node) => node.toolCall !== undefined && node.toolResult !== undefined,
   );
   const succeededTools = executedTools.filter((node) => node.toolResult?.status === "succeeded");
-  const completion = nodes.length > 0 ? Math.round((done / nodes.length) * 100) : 0;
+  const completion = nodes.length > 0 ? Math.round((settled / nodes.length) * 100) : 0;
+  const finished = nodes.length > 0 && settled === nodes.length;
   const spend = authorizedSpendTokens(nodes);
   // Counted on the tool node only, for the same reason as `executedTools`:
   // the result node carries the same tool name and would double every call.
@@ -69,7 +71,7 @@ export function GraphStats({
       <article className="xstat">
         <span className="xstat-label">Status</span>
         <strong className={running ? "xstat-live" : ""}>
-          {running ? "Running" : startedAt === null ? "Idle" : "Complete"}
+          {running ? "Running" : startedAt === null ? "Idle" : finished ? "Complete" : "Stopped"}
         </strong>
         <small>{startedAt === null ? "No goal sent yet" : elapsedLabel}</small>
       </article>
@@ -77,12 +79,12 @@ export function GraphStats({
       <article className="xstat">
         <span className="xstat-label">Nodes</span>
         <strong>{nodes.length}</strong>
-        <small>{blocked > 0 ? `${blocked} refused` : "Total in graph"}</small>
+        <small>{blocked > 0 ? `${blocked} blocked` : "Total in graph"}</small>
       </article>
 
       <article className="xstat">
-        <span className="xstat-label">Completed</span>
-        <strong className="xstat-good">{done}</strong>
+        <span className="xstat-label">Settled</span>
+        <strong className="xstat-good">{settled}</strong>
         <small>{nodes.length > 0 ? `${completion}% of graph` : "Nothing yet"}</small>
       </article>
 

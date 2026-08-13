@@ -33,7 +33,13 @@ import {
   ModelBoundaryPanel,
   NodeDetailPanel,
 } from "./ExecutionGraphPanels";
-import { AGENT_CORE_ID, restoreGraphNodes, type ExecutionNode } from "./execution-graph-model";
+import {
+  AGENT_CORE_ID,
+  expandableGraphNodes,
+  initialExecutionNodeStatus,
+  restoreGraphNodes,
+  type ExecutionNode,
+} from "./execution-graph-model";
 
 interface QueueItem {
   readonly node: ExecutionNode;
@@ -237,7 +243,7 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
             ...children,
           ]);
 
-          const hasToolCalls = children.some((child) => child.toolCall);
+          const nextSteps = expandableGraphNodes(children);
           const toolResults: Array<{
             node: ExecutionNode;
             result: AuthorizedAgentGraphToolResultDTO;
@@ -300,13 +306,10 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
               toolResults.push({ node: resultNode, result: toolResult });
               continue;
             }
-            if (!hasToolCalls && child.expand && child.depth < 4) {
-              queue.push({ node: child, lineage: [...item.lineage, child.label] });
-            }
           }
 
           if (toolResults.length > 0 && created < MAX_NODES_PER_RUN) {
-            const observation = makeToolObservationNode(toolResults);
+            const observation = makeToolObservationNode(toolResults, nextSteps.length === 0);
             created += 1;
             setNodes((current) => [...current, observation]);
             focusNode(observation.id);
@@ -321,12 +324,15 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
             // This cannot spin: the tool is removed from availableTools once it
             // has run, identical calls are blocked by fingerprint, and the depth,
             // request and node caps all still apply.
-            if (observation.depth < 4) {
+            if (nextSteps.length === 0 && observation.depth < 4) {
               queue.push({
                 node: observation,
                 lineage: [...item.lineage, observation.label],
               });
             }
+          }
+          for (const nextStep of nextSteps) {
+            queue.push({ node: nextStep, lineage: [...item.lineage, nextStep.label] });
           }
         } catch (error) {
           const blocked = makeBlockedNode(item.node, error instanceof Error ? error.message : "Expansion failed");
@@ -356,14 +362,14 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
     const runId = ++runIdRef.current;
     const root = makeGoalNode(nextGoal);
 
-    setNodes((current) => [...current, root]);
+    setNodes([root]);
     setGoal(nextGoal);
     setSelectedId(root.id);
     setFollow(true);
     setCommand("");
     setComposerOpen(false);
     setRunning(true);
-    setStartedAt((current) => current ?? Date.now());
+    setStartedAt(Date.now());
     setNow(Date.now());
     setAnnouncement(`AI Agent received: ${nextGoal}`);
     void growGraph(root, nextGoal, runId).finally(() => {
@@ -585,6 +591,10 @@ function placeChildren(
 ): ExecutionNode[] {
   return children.map((child) => {
     const depth = parent.depth + 1;
+    const expand = child.expand
+      && depth < 4
+      && child.kind !== "blocked"
+      && child.kind !== "complete";
     return {
       id: crypto.randomUUID(),
       parentId: parent.id,
@@ -594,12 +604,8 @@ function placeChildren(
       kind: child.kind,
       depth,
       column: parent.column + 1,
-      expand: child.expand && depth < 4 && child.kind !== "blocked" && child.kind !== "complete",
-      status: child.kind === "blocked"
-        ? ("blocked" as const)
-        : child.toolCall || child.expand
-          ? ("queued" as const)
-          : ("done" as const),
+      expand,
+      status: initialExecutionNodeStatus(child.kind, expand, child.toolCall !== undefined),
     };
   });
 }
@@ -654,8 +660,11 @@ function makeToolObservationNode(
     readonly node: ExecutionNode;
     readonly result: AuthorizedAgentGraphToolResultDTO;
   }>,
+  continueFromObservation: boolean,
 ): ExecutionNode {
   const firstParent = tools[0]?.node;
+  const depth = Math.max(...tools.map((item) => item.node.depth));
+  const expand = continueFromObservation && depth < 4;
   return {
     id: crypto.randomUUID(),
     parentId: firstParent?.id ?? AGENT_CORE_ID,
@@ -666,10 +675,11 @@ function makeToolObservationNode(
     kind: "observe",
     // Same reasoning as makeToolResultNode: merging results is not itself a
     // planning round. The round is charged when this node is expanded.
-    depth: Math.max(...tools.map((item) => item.node.depth)),
+    depth,
     column: Math.max(...tools.map((item) => item.node.column)) + 1,
-    expand: true,
-    status: "queued",
+    expand,
+    status: initialExecutionNodeStatus("observe", expand, false),
+    ...(!expand ? { endedAt: Date.now() } : {}),
   };
 }
 

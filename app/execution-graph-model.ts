@@ -346,9 +346,23 @@ export function formatBaseUnitAmount(value: string, decimals: number): string {
 
 /** A reload cannot resume network work, so an in-flight node becomes an honest interruption. */
 export function restoreGraphNodes(nodes: readonly ExecutionNode[]): ExecutionNode[] {
-  return nodes.map((node) => node.status === "running"
+  return nodes.map((node) => node.status === "running" || node.status === "queued"
     ? { ...node, status: "blocked", endedAt: Date.now() }
     : node);
+}
+
+/** Non-tool siblings still run after their tool result becomes an observation. */
+export function expandableGraphNodes(nodes: readonly ExecutionNode[]): ExecutionNode[] {
+  return nodes.filter((node) => !node.toolCall && node.expand && node.depth < 4);
+}
+
+export function initialExecutionNodeStatus(
+  kind: ExecutionNodeKind,
+  expand: boolean,
+  hasToolCall: boolean,
+): ExecutionNodeStatus {
+  if (kind === "blocked") return "blocked";
+  return hasToolCall || expand ? "queued" : "done";
 }
 
 /**

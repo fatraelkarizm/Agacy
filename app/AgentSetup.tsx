@@ -214,6 +214,10 @@ export function AgentSetup({
               <ReviewItem label="Authority" value="Scoped agent permission" />
             </dl>
             <PolicyPreview draft={draft} />
+            <p className="onboarding-sign-note">
+              Phantom will ask you to create the agent&apos;s devnet policy account. Its SOL change
+              is account rent plus the network fee, not an agent payment.
+            </p>
             {provisioningError && (
               <p className="field-error" role="alert">
                 {provisioningError} You can try again — nothing was created.
