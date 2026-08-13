@@ -437,6 +437,7 @@ async function runConfidentialPayment(
         ? "An ordinary public transfer completed on devnet. The amount is visible on-chain to anyone. This used a demo mint, not the owner's funds."
         : "A confidential transfer completed on devnet and the amount was verified unreadable on-chain. This used a demo mint, not the owner's funds. Exact values and addresses were withheld.",
       signature: receipt.signature,
+      paymentAccounting: receipt.accounting,
     };
   } catch (error) {
     return {

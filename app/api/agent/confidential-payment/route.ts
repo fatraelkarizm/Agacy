@@ -268,8 +268,11 @@ export async function POST(request: Request) {
       );
     }
 
+    const payerSolBefore = (await client.rpc
+      .getBalance(payer.address, { commitment: "confirmed" })
+      .send()).value;
     const started = Date.now();
-    const { signature } = await deps.executeConfidentialTransfer(client, payer, {
+    const { signature, remainingBalance } = await deps.executeConfidentialTransfer(client, payer, {
       sourceToken: env.sender,
       destinationToken: env.recipient,
       mint: env.mint,
@@ -281,6 +284,15 @@ export async function POST(request: Request) {
       amount,
     });
     const elapsedMs = Date.now() - started;
+    const payerSolAfter = (await client.rpc
+      .getBalance(payer.address, { commitment: "confirmed" })
+      .send()).value;
+    const transaction = await client.rpc.getTransaction(signature as never, {
+      commitment: "confirmed",
+      encoding: "json",
+      maxSupportedTransactionVersion: 0,
+    }).send();
+    const transactionFee = transaction?.meta?.fee ?? 0n;
 
     // Verified, not asserted: read the recipient's account back and confirm the
     // transferred amount does not appear as a plaintext u64 anywhere in it.
@@ -302,6 +314,15 @@ export async function POST(request: Request) {
       amountReadableOnChain: raw.includes(plaintext),
       elapsedMs,
       explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
+      accounting: {
+        asset: "demo token",
+        tokenBalanceBefore: state.availableBalance.toString(),
+        amountSpent: amount.toString(),
+        tokenBalanceAfter: remainingBalance.toString(),
+        payerSolBeforeLamports: payerSolBefore.toString(),
+        transactionFeeLamports: transactionFee.toString(),
+        payerSolAfterLamports: payerSolAfter.toString(),
+      },
     });
   } catch (error) {
     // A failed provision must not be cached, or every later call inherits it.

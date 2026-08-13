@@ -97,12 +97,20 @@ export function toolProvider(node: {
 export function paymentReceipt(node: {
   readonly toolCall?: AgentGraphToolCallDTO;
   readonly toolResult?: AuthorizedAgentGraphToolResultDTO;
-}): { readonly confidential: boolean; readonly signature: string } | null {
+}): {
+  readonly confidential: boolean;
+  readonly signature: string;
+  readonly accounting?: AuthorizedAgentGraphToolResultDTO["paymentAccounting"];
+} | null {
   const result = node.toolResult;
   if (result?.tool !== "pay_confidentially" || result.status !== "succeeded") return null;
   if (!result.signature) return null;
   // The summary is the only place the executed mode survives onto the node.
-  return { confidential: !result.summary.includes("IS readable"), signature: result.signature };
+  return {
+    confidential: !result.summary.includes("IS readable"),
+    signature: result.signature,
+    ...(result.paymentAccounting ? { accounting: result.paymentAccounting } : {}),
+  };
 }
 
 export function isAisaPowered(node: {
@@ -325,6 +333,15 @@ export function formatClock(timestamp: number): string {
     second: "2-digit",
     hour12: false,
   });
+}
+
+/** Exact decimal formatting for bigint-shaped API values; money never passes through Number. */
+export function formatBaseUnitAmount(value: string, decimals: number): string {
+  const raw = BigInt(value);
+  const scale = 10n ** BigInt(decimals);
+  const whole = raw / scale;
+  const fraction = (raw % scale).toString().padStart(decimals, "0").replace(/0+$/, "");
+  return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
 /**

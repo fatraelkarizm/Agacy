@@ -8,6 +8,8 @@
  * and only the result comes back here.
  */
 
+import type { PaymentAccountingDTO } from "../../server/dto/agent-graph.dto";
+
 export type PaymentMode = "confidential" | "public";
 
 export interface ConfidentialPaymentReceipt {
@@ -20,6 +22,7 @@ export interface ConfidentialPaymentReceipt {
   readonly amountReadableOnChain: boolean;
   readonly elapsedMs: number;
   readonly explorerUrl: string;
+  readonly accounting?: PaymentAccountingDTO;
 }
 
 export async function payConfidentially(

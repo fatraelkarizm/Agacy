@@ -1655,6 +1655,10 @@ button.primary:hover:not(:disabled) {
 .xdetail-privacy-facts div { padding: 8px; border-radius: 7px; background: rgba(74, 222, 155, 0.06); }
 .xdetail-privacy-facts dt { color: var(--text-faint); font-size: 0.57rem; text-transform: uppercase; letter-spacing: 0.04em; }
 .xdetail-privacy-facts dd { margin-top: 3px; color: var(--text-dim); font-size: 0.65rem; }
+.xdetail-accounting { display: grid; gap: 1px; overflow: hidden; border: 1px solid rgba(74, 222, 155, 0.2); border-radius: 8px; background: rgba(74, 222, 155, 0.12); }
+.xdetail-accounting div { display: flex; justify-content: space-between; gap: 10px; padding: 7px 8px; background: var(--surface); }
+.xdetail-accounting dt { color: var(--text-faint); font-size: 0.62rem; }
+.xdetail-accounting dd { color: var(--text); font-family: var(--mono); font-size: 0.62rem; text-align: right; }
 
 /* ---- status pill ---- */
 
@@ -1733,6 +1737,20 @@ button.primary:hover:not(:disabled) {
   background: linear-gradient(90deg, rgba(74, 222, 155, 0.09), rgba(17, 15, 30, 0.82));
 }
 
+.xprivacy-accounting {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgba(74, 222, 155, 0.18);
+  border-radius: 7px;
+  background: rgba(74, 222, 155, 0.16);
+}
+.xprivacy-accounting div { padding: 7px 9px; background: rgba(10, 18, 15, 0.96); }
+.xprivacy-accounting dt { color: var(--text-faint); font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.xprivacy-accounting dd { margin-top: 2px; color: var(--text); font-family: var(--mono); font-size: 0.64rem; }
+
 .xprivacy-trace-title { display: flex; align-items: center; gap: 8px; }
 .xprivacy-trace-title > span:last-child { display: grid; }
 .xprivacy-trace-title strong { color: var(--private); font-size: 0.72rem; }
@@ -1759,6 +1777,7 @@ button.primary:hover:not(:disabled) {
 @media (max-width: 960px) {
   .xprivacy-trace { grid-template-columns: 1fr auto; }
   .xprivacy-trace ol { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; }
+  .xprivacy-accounting { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 /* ---- payment mode toggle ---- */

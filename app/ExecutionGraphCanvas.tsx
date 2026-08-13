@@ -37,6 +37,7 @@ import {
   NODE_KIND_META,
   NODE_WIDTH,
   focusedNodeIds,
+  formatBaseUnitAmount,
   formatDuration,
   toolProvider,
   paymentReceipt,
@@ -330,6 +331,7 @@ function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
     : failed
       ? ["Confidential transfer stopped before verification"]
       : ["Building ciphertext and proofs…"];
+  const accounting = receipt?.accounting;
 
   return (
     <aside className={`xprivacy-trace${receipt ? " is-verified" : failed ? " is-failed" : " is-running"}`}>
@@ -357,6 +359,26 @@ function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
           Trace transaction
           <ArrowSquareOut aria-hidden="true" size={13} />
         </a>
+      )}
+      {accounting && (
+        <dl className="xprivacy-accounting">
+          <div>
+            <dt>Demo treasury</dt>
+            <dd>{formatBaseUnitAmount(accounting.tokenBalanceBefore, 6)} → {formatBaseUnitAmount(accounting.tokenBalanceAfter, 6)} tokens</dd>
+          </div>
+          <div>
+            <dt>Amount spent</dt>
+            <dd>−{formatBaseUnitAmount(accounting.amountSpent, 6)} tokens</dd>
+          </div>
+          <div>
+            <dt>Main transaction fee</dt>
+            <dd>−{formatBaseUnitAmount(accounting.transactionFeeLamports, 9)} SOL</dd>
+          </div>
+          <div>
+            <dt>Fee-payer SOL after full proof flow</dt>
+            <dd>{formatBaseUnitAmount(accounting.payerSolBeforeLamports, 9)} → {formatBaseUnitAmount(accounting.payerSolAfterLamports, 9)}</dd>
+          </div>
+        </dl>
       )}
     </aside>
   );

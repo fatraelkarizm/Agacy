@@ -67,6 +67,19 @@ export interface AuthorizedAgentGraphToolResultDTO {
   /** Redacted observation safe to send back to the model for replanning. */
   readonly modelSummary: string;
   readonly signature?: string;
+  /** Owner-only accounting read back from the real devnet execution. */
+  readonly paymentAccounting?: PaymentAccountingDTO;
+}
+
+export interface PaymentAccountingDTO {
+  readonly asset: "demo token";
+  /** Base units are strings so the API boundary never serializes bigint. */
+  readonly tokenBalanceBefore: string;
+  readonly amountSpent: string;
+  readonly tokenBalanceAfter: string;
+  readonly payerSolBeforeLamports: string;
+  readonly transactionFeeLamports: string;
+  readonly payerSolAfterLamports: string;
 }
 
 export interface AgentGraphParentDTO {

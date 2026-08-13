@@ -17,6 +17,7 @@ import {
   REDACTED_DETAIL,
   authorizedSpendTokens,
   formatClock,
+  formatBaseUnitAmount,
   formatDuration,
   isAisaPowered,
   paymentReceipt,
@@ -380,6 +381,14 @@ function OwnerNodeDetail({ node, onClose }: { node: ExecutionNode; onClose: () =
             <div><dt>Publicly traceable</dt><dd>Signature · timing · fee</dd></div>
             <div><dt>Withheld on-chain</dt><dd>Amount · balance</dd></div>
           </dl>
+          {receipt.accounting && (
+            <dl className="xdetail-accounting">
+              <div><dt>Demo token balance</dt><dd>{formatBaseUnitAmount(receipt.accounting.tokenBalanceBefore, 6)} → {formatBaseUnitAmount(receipt.accounting.tokenBalanceAfter, 6)}</dd></div>
+              <div><dt>Amount spent</dt><dd>−{formatBaseUnitAmount(receipt.accounting.amountSpent, 6)} demo tokens</dd></div>
+              <div><dt>Main transaction fee</dt><dd>−{formatBaseUnitAmount(receipt.accounting.transactionFeeLamports, 9)} SOL</dd></div>
+              <div><dt>Fee-payer SOL after full flow</dt><dd>{formatBaseUnitAmount(receipt.accounting.payerSolBeforeLamports, 9)} → {formatBaseUnitAmount(receipt.accounting.payerSolAfterLamports, 9)}</dd></div>
+            </dl>
+          )}
         </section>
       )}
     </aside>
