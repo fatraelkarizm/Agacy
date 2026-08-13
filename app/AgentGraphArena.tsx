@@ -33,7 +33,7 @@ import {
   ModelBoundaryPanel,
   NodeDetailPanel,
 } from "./ExecutionGraphPanels";
-import { AGENT_CORE_ID, type ExecutionNode } from "./execution-graph-model";
+import { AGENT_CORE_ID, restoreGraphNodes, type ExecutionNode } from "./execution-graph-model";
 
 interface QueueItem {
   readonly node: ExecutionNode;
@@ -42,6 +42,7 @@ interface QueueItem {
 
 interface AgentGraphArenaProps {
   readonly onExit: () => void;
+  readonly persistenceKey: string;
   readonly availableTools: readonly AgentGraphToolName[];
   readonly onToolCall: (
     call: AgentGraphToolCallDTO,
@@ -52,7 +53,14 @@ interface AgentGraphArenaProps {
 const MAX_EXPANSION_REQUESTS = 8;
 const MAX_NODES_PER_RUN = 36;
 
-export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGraphArenaProps) {
+interface StoredGraphState {
+  readonly nodes: readonly ExecutionNode[];
+  readonly goal: string;
+  readonly startedAt: number | null;
+  readonly paymentMode: "confidential" | "public";
+}
+
+export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenceKey }: AgentGraphArenaProps) {
   const [nodes, setNodes] = useState<ExecutionNode[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [command, setCommand] = useState("");
@@ -77,9 +85,39 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [announcement, setAnnouncement] = useState("AI Agent ready");
+  const [restored, setRestored] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const runIdRef = useRef(0);
   const followRef = useRef(true);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(`agacy.agent-graph.${persistenceKey}`);
+      if (raw) {
+        const saved = JSON.parse(raw) as StoredGraphState;
+        const restoredNodes = Array.isArray(saved.nodes) ? restoreGraphNodes(saved.nodes) : [];
+        setNodes([...restoredNodes]);
+        setGoal(typeof saved.goal === "string" ? saved.goal : "");
+        setStartedAt(typeof saved.startedAt === "number" ? saved.startedAt : null);
+        setPaymentMode(saved.paymentMode === "public" ? "public" : "confidential");
+        setAnnouncement(restoredNodes.length > 0 ? "Restored this tab's execution graph" : "AI Agent ready");
+      }
+    } catch {
+      sessionStorage.removeItem(`agacy.agent-graph.${persistenceKey}`);
+    } finally {
+      setRestored(true);
+    }
+  }, [persistenceKey]);
+
+  useEffect(() => {
+    if (!restored) return;
+    const key = `agacy.agent-graph.${persistenceKey}`;
+    if (nodes.length === 0) {
+      sessionStorage.removeItem(key);
+      return;
+    }
+    sessionStorage.setItem(key, JSON.stringify({ nodes, goal, startedAt, paymentMode } satisfies StoredGraphState));
+  }, [goal, nodes, paymentMode, persistenceKey, restored, startedAt]);
 
   useEffect(() => {
     followRef.current = follow;

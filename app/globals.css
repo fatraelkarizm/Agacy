@@ -2613,7 +2613,18 @@ button.primary:hover:not(:disabled) {
 .dashboard-side-footer a:hover { border-color: transparent; background: rgba(124, 92, 255, 0.08); color: var(--text); }
 .dashboard-side-nav button.active { background: linear-gradient(100deg, var(--violet), #8a6dff); color: white; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); }
 .dashboard-side-footer { display: grid; gap: 6px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--border); }
-.dashboard-new-agent { justify-content: center; width: 100%; min-height: 43px; margin-bottom: 10px; border-radius: 8px; }
+.dashboard-new-agent {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 43px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  line-height: 1;
+}
+.dashboard-new-agent svg { flex: none; }
 
 .dashboard-main { min-width: 0; }
 

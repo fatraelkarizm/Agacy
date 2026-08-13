@@ -59,6 +59,15 @@ import {
 } from "../../server/services/session-state";
 
 const devnetClient = createDevnetClient();
+const DASHBOARD_SECTIONS: readonly DashboardSection[] = [
+  "overview", "agents", "transactions", "policies", "security", "settings",
+  "onboarding", "graph", "run",
+];
+
+function sectionFromUrl(): DashboardSection | null {
+  const value = new URLSearchParams(window.location.search).get("section");
+  return DASHBOARD_SECTIONS.includes(value as DashboardSection) ? value as DashboardSection : null;
+}
 
 /**
  * `/dashboard` is a real route rather than a `stage` value on `/` so that a
@@ -192,8 +201,11 @@ export default function DashboardPage() {
         setOwnerWallet(wallet);
 
         const session = loadDashboardSession(wallet.address);
+        const requestedSection = sectionFromUrl();
+        const restoredSection = requestedSection ?? session?.dashboardSection ?? "overview";
+        setDashboardSection(restoredSection);
+        window.history.replaceState(null, "", `/dashboard?section=${restoredSection}`);
         if (session) {
-          setDashboardSection(session.dashboardSection);
           setOnboardingStep(session.onboardingStep);
           setSetupDraft(session.setupDraft);
           setAgent(session.agent);
@@ -210,6 +222,20 @@ export default function DashboardPage() {
       active = false;
     };
   }, [router]);
+
+  useEffect(() => {
+    const restoreUrlSection = () => {
+      const section = sectionFromUrl();
+      if (section) setDashboardSection(section);
+    };
+    window.addEventListener("popstate", restoreUrlSection);
+    return () => window.removeEventListener("popstate", restoreUrlSection);
+  }, []);
+
+  const navigateDashboard = useCallback((section: DashboardSection) => {
+    setDashboardSection(section);
+    window.history.pushState(null, "", `/dashboard?section=${section}`);
+  }, []);
 
   const invalidateWallet = useCallback(() => {
     if (ownerWallet) clearDashboardSessionFor(ownerWallet.address);
@@ -302,7 +328,7 @@ export default function DashboardPage() {
         setAgent(draft);
         setPolicy(toSpendPolicy(draft));
         reset();
-        setDashboardSection("graph");
+        navigateDashboard("graph");
       } catch (error) {
         setProvisioningError(
           error instanceof Error
@@ -313,7 +339,7 @@ export default function DashboardPage() {
         setProvisioning(false);
       }
     },
-    [ownerWallet, reset],
+    [navigateDashboard, ownerWallet, reset],
   );
 
   /**
@@ -516,8 +542,8 @@ export default function DashboardPage() {
       operationalStatus={running ? "active" : "idle"}
       currentTask={currentTask}
       ownerView={ownerView}
-      onNavigate={setDashboardSection}
-      onNewAgent={() => setDashboardSection("onboarding")}
+      onNavigate={navigateDashboard}
+      onNewAgent={() => navigateDashboard("onboarding")}
       onToggleOwnerView={() => setOwnerView((visible) => !visible)}
       onDisconnect={() => void disconnect()}
       onProof={() => router.push("/proof")}
@@ -527,7 +553,8 @@ export default function DashboardPage() {
         <AgentGraphArena
           availableTools={availableTools}
           onToolCall={runGraphTool}
-          onExit={() => setDashboardSection("overview")}
+          persistenceKey={ownerWallet.address}
+          onExit={() => navigateDashboard("overview")}
         />
       ) : dashboardSection === "onboarding" ? (
         <AgentSetup
@@ -593,7 +620,7 @@ export default function DashboardPage() {
               {showAttackSim ? "Hide attacks" : "Attack this agent"}
             </button>
             {done && <button onClick={() => router.push("/proof")}>See on-chain proof</button>}
-            <button onClick={() => setDashboardSection("overview")}>Back to overview</button>
+            <button onClick={() => navigateDashboard("overview")}>Back to overview</button>
             <span className="hint">
               {graphEvents.length <= 1
                 ? "Idle."

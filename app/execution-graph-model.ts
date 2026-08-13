@@ -344,6 +344,13 @@ export function formatBaseUnitAmount(value: string, decimals: number): string {
   return fraction ? `${whole}.${fraction}` : whole.toString();
 }
 
+/** A reload cannot resume network work, so an in-flight node becomes an honest interruption. */
+export function restoreGraphNodes(nodes: readonly ExecutionNode[]): ExecutionNode[] {
+  return nodes.map((node) => node.status === "running"
+    ? { ...node, status: "blocked", endedAt: Date.now() }
+    : node);
+}
+
 /**
  * The one tool that moves value. Kept as a helper so the spend card and the
  * detail panel cannot disagree about what counts as an authorized spend.

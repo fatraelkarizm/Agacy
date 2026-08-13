@@ -192,8 +192,8 @@ export function ModelBoundaryPanel() {
         </div>
       </div>
       <p className="xboundary-note">
-        Graph nodes are local to this browser. They are not written on-chain and are not
-        persisted between sessions.
+        Graph nodes are local to this browser and never written on-chain. This tab keeps them in
+        session storage so a reload can recover the trace; closing the tab session clears them.
       </p>
     </details>
   );
