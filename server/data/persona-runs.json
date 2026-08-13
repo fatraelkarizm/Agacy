@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-08-13T08:20:14.455Z",
+  "capturedAt": "2026-08-13T10:47:59.408Z",
   "note": "First-expansion planning only. Tool execution happens in the browser because the handlers call this app's API routes.",
   "model": "gpt-4o-mini",
   "availableTools": [
@@ -14,70 +14,217 @@
     {
       "id": "dao-treasury",
       "persona": "DAO treasury operator",
-      "goal": "I run a DAO treasury and a contributor payout is due. Check my wallet overview, search the web for any recent Solana security incident that should stop the payment, then pay 2 tokens confidentially so our runway stays private.",
-      "firstExpansionMs": 2585,
+      "goal": "Proposal AGP-27 passed and the contributor milestone was accepted. Confirm the treasury can cover the approved 2-token payout, then release it confidentially so the contributor's compensation and the DAO's runway are not exposed publicly.",
+      "firstExpansionMs": 2649,
       "children": 4,
       "toolsChosen": [
-        "get_wallet_overview",
-        "research_counterparty"
+        "pay_confidentially"
+      ],
+      "toolCalls": [
+        {
+          "name": "pay_confidentially",
+          "input": {
+            "amountTokens": 2
+          }
+        }
+      ],
+      "steps": [
+        {
+          "label": "Check treasury balance",
+          "kind": "reason",
+          "expand": true
+        },
+        {
+          "label": "Release payout confidentially",
+          "kind": "tool",
+          "expand": false,
+          "toolCall": {
+            "name": "pay_confidentially",
+            "input": {
+              "amountTokens": 2
+            }
+          }
+        },
+        {
+          "label": "Confirm payout amount",
+          "kind": "reason",
+          "expand": true
+        },
+        {
+          "label": "Review proposal details",
+          "kind": "reason",
+          "expand": false
+        }
       ],
       "labels": [
-        "Check wallet overview",
-        "Search for Solana security incidents",
-        "Prepare to pay tokens confidentially",
-        "Check for token price"
+        "Check treasury balance",
+        "Release payout confidentially",
+        "Confirm payout amount",
+        "Review proposal details"
       ]
     },
     {
       "id": "sme-procurement",
       "persona": "Startup / SME procurement",
-      "goal": "Our SaaS vendor invoice is due. Price SOL at mint So11111111111111111111111111111111111111112 and cross-check that price against an independent source, then pay 1 token confidentially so our supplier pricing does not become public.",
-      "firstExpansionMs": 3528,
+      "goal": "Our monthly Solana RPC vendor invoice has been approved for payment. Verify the SOL reference price at mint So11111111111111111111111111111111111111112 using two independent sources, check for any recent vendor outage or security incident, then settle the 1-token invoice confidentially so competitors cannot infer our supplier rate.",
+      "firstExpansionMs": 2869,
       "children": 4,
       "toolsChosen": [
         "get_token_price",
         "cross_check_token_price",
         "research_counterparty"
       ],
+      "toolCalls": [
+        {
+          "name": "get_token_price",
+          "input": {
+            "mint": "So11111111111111111111111111111111111111112"
+          }
+        },
+        {
+          "name": "cross_check_token_price",
+          "input": {
+            "mint": "So11111111111111111111111111111111111111112"
+          }
+        },
+        {
+          "name": "research_counterparty",
+          "input": {
+            "query": "Solana RPC vendor outage or security incident"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "label": "Verify SOL price via Jupiter",
+          "kind": "tool",
+          "expand": false,
+          "toolCall": {
+            "name": "get_token_price",
+            "input": {
+              "mint": "So11111111111111111111111111111111111111112"
+            }
+          }
+        },
+        {
+          "label": "Cross-check SOL price via CoinGecko",
+          "kind": "tool",
+          "expand": false,
+          "toolCall": {
+            "name": "cross_check_token_price",
+            "input": {
+              "mint": "So11111111111111111111111111111111111111112"
+            }
+          }
+        },
+        {
+          "label": "Research vendor for incidents",
+          "kind": "tool",
+          "expand": false,
+          "toolCall": {
+            "name": "research_counterparty",
+            "input": {
+              "query": "Solana RPC vendor outage or security incident"
+            }
+          }
+        },
+        {
+          "label": "Blocked - Awaiting vendor incident report",
+          "kind": "blocked",
+          "expand": false
+        }
+      ],
       "labels": [
-        "Price SOL via Jupiter",
-        "Cross-check SOL price",
-        "Research vendor news",
-        "Prepare for payment"
+        "Verify SOL price via Jupiter",
+        "Cross-check SOL price via CoinGecko",
+        "Research vendor for incidents",
+        "Blocked - Awaiting vendor incident report"
       ]
     },
     {
       "id": "protocol-keeper",
       "persona": "Web3 protocol / agent platform",
-      "goal": "I am a protocol settling a keeper's fee. Cross-check the SOL price at mint So11111111111111111111111111111111111111112 against an independent source, check my wallet overview, then settle 1 token confidentially.",
-      "firstExpansionMs": 2851,
-      "children": 4,
-      "toolsChosen": [
-        "cross_check_token_price",
-        "get_wallet_overview"
+      "goal": "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Confirm the operations wallet can cover the approved 1-token keeper reward, then settle it confidentially so the protocol does not publish operator compensation or treasury balance.",
+      "firstExpansionMs": 1210,
+      "children": 2,
+      "toolsChosen": [],
+      "toolCalls": [],
+      "steps": [
+        {
+          "label": "Check operations wallet balance",
+          "kind": "observe",
+          "expand": true
+        },
+        {
+          "label": "Prepare confidential payment",
+          "kind": "reason",
+          "expand": false
+        }
       ],
       "labels": [
-        "Cross-check SOL price",
-        "Check wallet overview",
-        "Prepare to settle fee",
-        "Blocked: Missing payment execution"
+        "Check operations wallet balance",
+        "Prepare confidential payment"
       ]
     },
     {
       "id": "individual",
       "persona": "Individual power user",
-      "goal": "Renew my monthly market data subscription. Search the web for any recent Solana security incident, price SOL at mint So11111111111111111111111111111111111111112, then pay 1 token confidentially so my spending profile stays private.",
-      "firstExpansionMs": 5074,
+      "goal": "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check that my wallet can cover it and whether the provider has reported a recent breach or outage that should stop renewal, then pay confidentially so the subscription amount is not added to my public spending profile.",
+      "firstExpansionMs": 2043,
       "children": 4,
       "toolsChosen": [
-        "get_token_price",
-        "pay_confidentially"
+        "get_wallet_overview",
+        "research_counterparty"
+      ],
+      "toolCalls": [
+        {
+          "name": "get_wallet_overview",
+          "input": {}
+        },
+        {
+          "name": "research_counterparty",
+          "input": {
+            "query": "market-data provider breach or outage"
+          }
+        }
+      ],
+      "steps": [
+        {
+          "label": "Check wallet balance",
+          "kind": "tool",
+          "expand": false,
+          "toolCall": {
+            "name": "get_wallet_overview",
+            "input": {}
+          }
+        },
+        {
+          "label": "Research provider status",
+          "kind": "tool",
+          "expand": false,
+          "toolCall": {
+            "name": "research_counterparty",
+            "input": {
+              "query": "market-data provider breach or outage"
+            }
+          }
+        },
+        {
+          "label": "Confirm subscription amount",
+          "kind": "reason",
+          "expand": false
+        },
+        {
+          "label": "Prepare payment",
+          "kind": "reason",
+          "expand": true
+        }
       ],
       "labels": [
-        "Search for recent Solana security incidents",
-        "Price SOL token",
-        "Pay 1 token confidentially",
-        "Cross-check SOL price"
+        "Check wallet balance",
+        "Research provider status",
+        "Confirm subscription amount",
+        "Prepare payment"
       ]
     }
   ]

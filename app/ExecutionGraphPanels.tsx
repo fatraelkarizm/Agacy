@@ -19,6 +19,7 @@ import {
   formatClock,
   formatDuration,
   isAisaPowered,
+  paymentReceipt,
   toolProvider,
   toPublicGraphNode,
   type ExecutionNode,
@@ -58,6 +59,9 @@ export function GraphStats({
   // Counted on the tool node only, for the same reason as `executedTools`:
   // the result node carries the same tool name and would double every call.
   const aisaCalls = executedTools.filter(isAisaPowered).length;
+  const confidentialPayments = executedTools.filter(
+    (node) => paymentReceipt(node)?.confidential,
+  ).length;
 
   return (
     <section className="xstats" aria-label="Run summary">
@@ -91,10 +95,22 @@ export function GraphStats({
         </small>
       </article>
 
-      <article className="xstat">
+      <article className="xstat xstat-aisa-card">
         <span className="xstat-label">Via AIsa</span>
         <strong className={aisaCalls > 0 ? "xstat-aisa" : ""}>{aisaCalls}</strong>
         <small>{aisaCalls === 0 ? "No sponsor calls yet" : "Independent data source"}</small>
+      </article>
+
+      <article className={confidentialPayments > 0 ? "xstat xstat-private-card" : "xstat"}>
+        <span className="xstat-label">Privacy proof</span>
+        <strong className={confidentialPayments > 0 ? "xstat-good" : ""}>
+          {confidentialPayments > 0 ? "Verified" : "Not run"}
+        </strong>
+        <small>
+          {confidentialPayments > 0
+            ? "Amount unreadable on-chain"
+            : "No confidential payment yet"}
+        </small>
       </article>
 
       <article className="xstat">
@@ -276,6 +292,7 @@ function OwnerNodeDetail({ node, onClose }: { node: ExecutionNode; onClose: () =
   const meta = NODE_KIND_META[node.kind];
   const duration = formatDuration(node);
   const result = node.toolResult;
+  const receipt = paymentReceipt(node);
 
   return (
     <aside className="xdetail" aria-label={`Details for ${node.label}`}>
@@ -348,6 +365,23 @@ function OwnerNodeDetail({ node, onClose }: { node: ExecutionNode; onClose: () =
           )}
         </section>
       )}
+
+      {receipt?.confidential && (
+        <section className="xdetail-section xdetail-privacy-trace">
+          <h4>Privacy trace</h4>
+          <div className="xdetail-privacy-status">
+            <LockKey aria-hidden="true" size={15} weight="duotone" />
+            <div>
+              <strong>Verified from devnet readback</strong>
+              <span>Amount ciphertext landed; plaintext was absent from recipient account bytes.</span>
+            </div>
+          </div>
+          <dl className="xdetail-privacy-facts">
+            <div><dt>Publicly traceable</dt><dd>Signature · timing · fee</dd></div>
+            <div><dt>Withheld on-chain</dt><dd>Amount · balance</dd></div>
+          </dl>
+        </section>
+      )}
     </aside>
   );
 }
@@ -386,24 +420,33 @@ export function ExecutionLog({ nodes, ownerView, onSelect }: ExecutionLogProps) 
         <p className="xlog-empty">No steps have run yet. Send the agent a goal to start the graph.</p>
       ) : (
         <ol className="xlog-list">
-          {entries.map((node) => (
-            <li key={node.id}>
-              <button onClick={() => onSelect(node.id)}>
-                <span className="xlog-time">{formatClock(node.startedAt)}</span>
-                <StatusPill status={node.status} />
-                <span className="xlog-label">{node.label}</span>
-                {ownerView ? (
-                  <span className="xlog-detail">{node.toolResult?.summary ?? node.detail}</span>
-                ) : (
-                  <span className="xlog-detail xlog-redacted">
-                    <LockKey aria-hidden="true" size={12} />
-                    Withheld
-                  </span>
-                )}
-                <span className="xlog-duration">{formatDuration(node) ?? "—"}</span>
-              </button>
-            </li>
-          ))}
+          {entries.map((node) => {
+            const receipt = paymentReceipt(node);
+            const isVerifiedPrivacyEvent = receipt?.confidential && node.kind === "result";
+            return (
+              <li key={node.id} className={isVerifiedPrivacyEvent ? "xlog-private-event" : ""}>
+                <button onClick={() => onSelect(node.id)}>
+                  <span className="xlog-time">{formatClock(node.startedAt)}</span>
+                  <StatusPill status={node.status} />
+                  <span className="xlog-label">{node.label}</span>
+                  {ownerView && isVerifiedPrivacyEvent ? (
+                    <span className="xlog-detail xlog-private-detail">
+                      <LockKey aria-hidden="true" size={12} />
+                      Ciphertext traced · plaintext absent
+                    </span>
+                  ) : ownerView ? (
+                    <span className="xlog-detail">{node.toolResult?.summary ?? node.detail}</span>
+                  ) : (
+                    <span className="xlog-detail xlog-redacted">
+                      <LockKey aria-hidden="true" size={12} />
+                      Withheld
+                    </span>
+                  )}
+                  <span className="xlog-duration">{formatDuration(node) ?? "—"}</span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>

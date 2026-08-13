@@ -1297,6 +1297,14 @@ button.primary:hover:not(:disabled) {
 .xstat-live { color: var(--private); }
 .xstat-good { color: var(--private); }
 .xstat-confidential { font-family: var(--mono); font-size: 1.02rem !important; }
+.xstat-private-card {
+  border-color: rgba(74, 222, 155, 0.34);
+  background: linear-gradient(145deg, rgba(74, 222, 155, 0.1), var(--surface));
+}
+.xstat-aisa-card {
+  border-color: rgba(247, 105, 24, 0.36);
+  background: linear-gradient(145deg, rgba(247, 105, 24, 0.11), var(--surface));
+}
 
 .xstat-reveal {
   display: grid;
@@ -1349,7 +1357,7 @@ button.primary:hover:not(:disabled) {
 
 .xgraph-canvas-shell {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   gap: 8px;
   /*
     The floor lives on the shell, not the canvas. With `min-height` on the
@@ -1506,6 +1514,20 @@ button.primary:hover:not(:disabled) {
 }
 
 .xnode-duration { flex: none; color: var(--text-faint); font-family: var(--mono); font-size: 0.6rem; }
+.xnode-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  min-width: 8px;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.xnode-state-done { color: var(--private); }
+.xnode-state-blocked { color: var(--exposed); }
 .xnode-status { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
 .xnode-status-dot-done { background: var(--private); }
 .xnode-status-dot-blocked { background: var(--exposed); }
@@ -1534,6 +1556,12 @@ button.primary:hover:not(:disabled) {
 .xgraph-canvas .react-flow__handle { width: 1px; height: 1px; min-width: 0; min-height: 0; border: 0; background: transparent; opacity: 0; }
 .xgraph-canvas .react-flow__edge-path { stroke: rgba(144, 126, 246, 0.34); stroke-width: 1.4; }
 .xgraph-canvas .xedge-running .react-flow__edge-path { stroke: var(--violet-bright); stroke-width: 2; }
+.xgraph-canvas .xedge-confidential .react-flow__edge-path {
+  stroke: var(--private);
+  stroke-width: 2.2;
+  filter: drop-shadow(0 0 4px rgba(74, 222, 155, 0.34));
+}
+.xgraph-canvas .xedge-confidential .react-flow__arrowhead * { fill: var(--private); }
 .xgraph-canvas .xedge-blocked .react-flow__edge-path { stroke: rgba(255, 92, 122, 0.6); stroke-dasharray: 5 4; }
 .xgraph-canvas .xedge-queued .react-flow__edge-path { stroke: rgba(144, 126, 246, 0.2); stroke-dasharray: 4 4; }
 .xgraph-canvas .react-flow__arrowhead * { fill: rgba(144, 126, 246, 0.5); stroke: none; }
@@ -1618,6 +1646,16 @@ button.primary:hover:not(:disabled) {
 
 .xdetail-link { display: inline-flex; align-items: center; gap: 5px; color: var(--violet-bright); font-size: 0.73rem; }
 
+.xdetail-privacy-trace { border-top-color: rgba(74, 222, 155, 0.22); }
+.xdetail-privacy-status { display: flex; gap: 9px; color: var(--private); }
+.xdetail-privacy-status > div { display: grid; gap: 2px; }
+.xdetail-privacy-status strong { font-size: 0.75rem; font-weight: 600; }
+.xdetail-privacy-status span { color: var(--text-dim); font-size: 0.69rem; line-height: 1.45; }
+.xdetail-privacy-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.xdetail-privacy-facts div { padding: 8px; border-radius: 7px; background: rgba(74, 222, 155, 0.06); }
+.xdetail-privacy-facts dt { color: var(--text-faint); font-size: 0.57rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.xdetail-privacy-facts dd { margin-top: 3px; color: var(--text-dim); font-size: 0.65rem; }
+
 /* ---- status pill ---- */
 
 .xpill {
@@ -1673,10 +1711,55 @@ button.primary:hover:not(:disabled) {
 }
 
 .xlog-list button:hover { background: rgba(144, 126, 246, 0.06); }
+.xlog-private-event button { background: rgba(74, 222, 155, 0.045); }
+.xlog-private-event button:hover { background: rgba(74, 222, 155, 0.08); }
 .xlog-time { color: var(--text-faint); font-family: var(--mono); font-size: 0.68rem; }
 .xlog-label { overflow: hidden; color: var(--text); font-size: 0.74rem; text-overflow: ellipsis; white-space: nowrap; }
 .xlog-detail { overflow: hidden; color: var(--text-faint); font-size: 0.71rem; text-overflow: ellipsis; white-space: nowrap; }
 .xlog-duration { color: var(--text-faint); font-family: var(--mono); font-size: 0.68rem; }
+.xlog-private-detail { display: inline-flex; align-items: center; gap: 5px; color: var(--private); }
+
+/* ---- live privacy trace ---- */
+
+.xprivacy-trace {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid rgba(74, 222, 155, 0.24);
+  border-radius: 10px;
+  background: linear-gradient(90deg, rgba(74, 222, 155, 0.09), rgba(17, 15, 30, 0.82));
+}
+
+.xprivacy-trace-title { display: flex; align-items: center; gap: 8px; }
+.xprivacy-trace-title > span:last-child { display: grid; }
+.xprivacy-trace-title strong { color: var(--private); font-size: 0.72rem; }
+.xprivacy-trace-title small { color: var(--text-faint); font-size: 0.59rem; }
+.xprivacy-trace-lock { color: var(--private); font-family: var(--mono); font-size: 1rem; }
+
+.xprivacy-trace ol { display: flex; align-items: center; justify-content: center; min-width: 0; list-style: none; }
+.xprivacy-trace li { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); font-family: var(--mono); font-size: 0.61rem; white-space: nowrap; }
+.xprivacy-trace li + li::before { content: "→"; margin: 0 8px; color: rgba(74, 222, 155, 0.5); }
+.xprivacy-trace.is-verified li svg { color: var(--private); }
+.xprivacy-trace.is-running { border-color: var(--border-bright); }
+.xprivacy-trace.is-running li svg { animation: xpulse 0.9s ease-in-out infinite; color: var(--violet-bright); }
+.xprivacy-trace.is-failed { border-color: rgba(255, 92, 122, 0.3); background: var(--exposed-dim); }
+
+.xprivacy-trace > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--private);
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .xprivacy-trace { grid-template-columns: 1fr auto; }
+  .xprivacy-trace ol { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; }
+}
 
 /* ---- payment mode toggle ---- */
 
@@ -1761,6 +1844,17 @@ button.primary:hover:not(:disabled) {
   font-size: 0.53rem;
   letter-spacing: 0.03em;
   white-space: nowrap;
+}
+
+.xnode-aisa {
+  border-color: rgba(247, 105, 24, 0.34);
+  border-left-color: var(--aisa);
+  background: linear-gradient(145deg, rgba(247, 105, 24, 0.13), rgba(19, 17, 32, 0.96));
+}
+.xnode-aisa .xnode-icon { color: var(--aisa); background: rgba(247, 105, 24, 0.12); }
+.xnode-aisa.is-selected {
+  border-color: rgba(247, 105, 24, 0.62);
+  box-shadow: 0 0 0 2px rgba(247, 105, 24, 0.2), 0 12px 30px rgba(0, 0, 0, 0.46);
 }
 
 .xnode-provider img,
@@ -2204,6 +2298,145 @@ button.primary:hover:not(:disabled) {
 .proof-value:hover { text-decoration: underline; }
 .proof-verdict { font-family: var(--mono); font-size: 0.92rem; color: var(--private); }
 
+.encryption-proof {
+  margin-bottom: 14px;
+  padding: 24px;
+  border: 1px solid color-mix(in srgb, var(--private) 38%, var(--border));
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 92% 0%, color-mix(in srgb, var(--private) 12%, transparent), transparent 35%),
+    var(--surface);
+}
+
+.encryption-proof-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.encryption-proof-head .step-index { margin-bottom: 8px; }
+.encryption-proof-head h3 { margin: 0; }
+
+.encryption-proof-status {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--private) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--private) 10%, transparent);
+  color: var(--private);
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.encryption-proof-flow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 22px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 13px;
+  background: var(--border);
+}
+
+.encryption-proof-step {
+  display: flex;
+  gap: 12px;
+  min-height: 130px;
+  padding: 16px;
+  background: var(--surface);
+}
+
+.encryption-proof-number {
+  color: var(--private);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.encryption-proof-step strong,
+.privacy-boundary-item strong {
+  display: block;
+  font-size: 0.85rem;
+}
+
+.encryption-proof-step p {
+  margin: 7px 0 0;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.privacy-boundary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.privacy-boundary-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+}
+
+.privacy-boundary-item > div { min-width: 0; }
+
+.privacy-boundary-item span:not(.privacy-boundary-state) {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+}
+
+.privacy-boundary-state {
+  flex: 0 0 auto;
+  min-width: 70px;
+  padding: 5px 7px;
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.privacy-boundary-state.is-private {
+  background: color-mix(in srgb, var(--private) 13%, transparent);
+  color: var(--private);
+}
+
+.privacy-boundary-state.is-public {
+  background: color-mix(in srgb, var(--text-dim) 12%, transparent);
+  color: var(--text-dim);
+}
+
+.encryption-proof-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .encryption-proof-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .encryption-proof-links { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 620px) {
+  .encryption-proof { padding: 18px; }
+  .encryption-proof-head { display: block; }
+  .encryption-proof-status { display: inline-block; margin-top: 14px; }
+  .encryption-proof-flow,
+  .privacy-boundary { grid-template-columns: 1fr; }
+  .encryption-proof-step { min-height: auto; }
+}
+
 /* ---------- public docs ---------- */
 
 .docs-page { min-height: 100dvh; }
@@ -2359,7 +2592,7 @@ button.primary:hover:not(:disabled) {
 
 .dashboard-side-nav button:hover:not(:disabled),
 .dashboard-side-footer a:hover { border-color: transparent; background: rgba(124, 92, 255, 0.08); color: var(--text); }
-.dashboard-side-nav button.active { background: linear-gradient(100deg, #6e45dd, #8a2fd0); color: white; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); }
+.dashboard-side-nav button.active { background: linear-gradient(100deg, var(--violet), #8a6dff); color: white; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14); }
 .dashboard-side-footer { display: grid; gap: 6px; margin-top: auto; padding-top: 18px; border-top: 1px solid var(--border); }
 .dashboard-new-agent { justify-content: center; width: 100%; min-height: 43px; margin-bottom: 10px; border-radius: 8px; }
 

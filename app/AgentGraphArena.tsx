@@ -571,10 +571,22 @@ function makeToolResultNode(
   result: AuthorizedAgentGraphToolResultDTO,
 ): ExecutionNode {
   const succeeded = result.status === "succeeded";
+  const confidentialPayment =
+    succeeded &&
+    result.tool === "pay_confidentially" &&
+    !result.summary.includes("IS readable");
+  const policyResult =
+    result.tool === "authorize_policy_spend" || result.tool === "check_on_chain_policy";
   return {
     id: crypto.randomUUID(),
     parentId: parent.id,
-    label: succeeded ? "Tool result" : result.status === "refused" ? "Policy refused" : "Tool blocked",
+    label: confidentialPayment
+      ? "Privacy verified"
+      : succeeded
+        ? "Tool result"
+        : result.status === "refused"
+          ? policyResult ? "Policy refused" : "Verification refused"
+          : "Tool blocked",
     detail: result.summary,
     modelDetail: result.modelSummary,
     kind: succeeded || result.status === "refused" ? "result" : "blocked",

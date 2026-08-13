@@ -38,22 +38,22 @@ const PERSONAS: readonly Persona[] = [
   {
     id: "dao-treasury",
     persona: "DAO treasury operator",
-    goal: "I run a DAO treasury and a contributor payout is due. Check my wallet overview, search the web for any recent Solana security incident that should stop the payment, then pay 2 tokens confidentially so our runway stays private.",
+    goal: "Proposal AGP-27 passed and the contributor milestone was accepted. Confirm the treasury can cover the approved 2-token payout, then release it confidentially so the contributor's compensation and the DAO's runway are not exposed publicly.",
   },
   {
     id: "sme-procurement",
     persona: "Startup / SME procurement",
-    goal: "Our SaaS vendor invoice is due. Price SOL at mint So11111111111111111111111111111111111111112 and cross-check that price against an independent source, then pay 1 token confidentially so our supplier pricing does not become public.",
+    goal: "Our monthly Solana RPC vendor invoice has been approved for payment. Verify the SOL reference price at mint So11111111111111111111111111111111111111112 using two independent sources, check for any recent vendor outage or security incident, then settle the 1-token invoice confidentially so competitors cannot infer our supplier rate.",
   },
   {
     id: "protocol-keeper",
     persona: "Web3 protocol / agent platform",
-    goal: "I am a protocol settling a keeper's fee. Cross-check the SOL price at mint So11111111111111111111111111111111111111112 against an independent source, check my wallet overview, then settle 1 token confidentially.",
+    goal: "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Confirm the operations wallet can cover the approved 1-token keeper reward, then settle it confidentially so the protocol does not publish operator compensation or treasury balance.",
   },
   {
     id: "individual",
     persona: "Individual power user",
-    goal: "Renew my monthly market data subscription. Search the web for any recent Solana security incident, price SOL at mint So11111111111111111111111111111111111111112, then pay 1 token confidentially so my spending profile stays private.",
+    goal: "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check that my wallet can cover it and whether the provider has reported a recent breach or outage that should stop renewal, then pay confidentially so the subscription amount is not added to my public spending profile.",
   },
 ];
 
@@ -73,6 +73,7 @@ for (const persona of PERSONAS) {
   const toolsChosen = expansion.children
     .map((child) => child.toolCall?.name)
     .filter((name): name is AgentGraphToolName => name !== undefined);
+  const toolCalls = expansion.children.flatMap((child) => child.toolCall ? [child.toolCall] : []);
 
   results.push({
     id: persona.id,
@@ -81,12 +82,22 @@ for (const persona of PERSONAS) {
     firstExpansionMs: elapsedMs,
     children: expansion.children.length,
     toolsChosen,
+    toolCalls,
+    steps: expansion.children.map((child) => ({
+      label: child.label,
+      kind: child.kind,
+      expand: child.expand,
+      ...(child.toolCall ? { toolCall: child.toolCall } : {}),
+    })),
     labels: expansion.children.map((child) => child.label),
   });
 
   console.log(`${persona.persona}: ${elapsedMs}ms, ${expansion.children.length} children`);
   console.log(`  tools: ${toolsChosen.join(", ") || "(none in first expansion)"}`);
-  for (const label of expansion.children.map((child) => child.label)) console.log(`  - ${label}`);
+  for (const call of toolCalls) console.log(`  call: ${call.name} ${JSON.stringify(call.input)}`);
+  for (const child of expansion.children) {
+    console.log(`  - [${child.kind}${child.expand ? ", expands" : ""}] ${child.label}`);
+  }
   console.log();
 }
 

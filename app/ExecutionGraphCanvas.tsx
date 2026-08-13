@@ -18,9 +18,11 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import {
+  ArrowSquareOut,
   Brain,
   CheckCircle,
   Eye,
+  LockKey,
   PlayCircle,
   Prohibit,
   Robot,
@@ -83,6 +85,7 @@ function ExecutionNodeCard({ data }: NodeProps<ExecutionFlowNode>) {
         "xnode",
         `xnode-${meta.tone}`,
         `xnode-status-${node.status}`,
+        provider ? "xnode-aisa" : "",
         isSelected ? "is-selected" : "",
         isDimmed ? "is-dimmed" : "",
         receipt ? (receipt.confidential ? "xnode-receipt" : "xnode-receipt-public") : "",
@@ -98,7 +101,9 @@ function ExecutionNodeCard({ data }: NodeProps<ExecutionFlowNode>) {
         <span className="xnode-meta">
           {receipt && (
             <span className="xnode-badge">
-              {receipt.confidential ? "ENCRYPTED" : "PUBLIC"}
+              {receipt.confidential
+                ? node.kind === "result" ? "VERIFIED" : "CIPHERTEXT"
+                : "PUBLIC"}
             </span>
           )}
           {provider && (
@@ -118,7 +123,15 @@ function ExecutionNodeCard({ data }: NodeProps<ExecutionFlowNode>) {
           {duration && <span className="xnode-duration">{duration}</span>}
         </span>
       </span>
-      <span className={`xnode-status xnode-status-dot-${node.status}`} aria-hidden="true" />
+      <span className={`xnode-state xnode-state-${node.status}`} aria-label={node.status}>
+        {node.status === "done" ? (
+          <><CheckCircle aria-hidden="true" size={11} weight="fill" />Done</>
+        ) : node.status === "blocked" ? (
+          <><Prohibit aria-hidden="true" size={11} weight="fill" />Blocked</>
+        ) : (
+          <span className={`xnode-status xnode-status-dot-${node.status}`} aria-hidden="true" />
+        )}
+      </span>
       <Handle type="source" position={Position.Right} isConnectable={false} />
     </div>
   );
@@ -211,7 +224,20 @@ function CanvasInner({
             target: node.id,
             type: "smoothstep",
             animated: node.status === "running",
-            className: `xedge xedge-${node.status}${dimmed ? " xedge-dimmed" : ""}`,
+            className: `xedge xedge-${node.status}${
+              node.kind === "result" && paymentReceipt(node)?.confidential
+                ? " xedge-confidential"
+                : ""
+            }${dimmed ? " xedge-dimmed" : ""}`,
+            ...(node.kind === "result" && paymentReceipt(node)?.confidential
+              ? {
+                  label: "ciphertext verified",
+                  labelStyle: { fill: "#4ade9b", fontSize: 9, fontFamily: "var(--mono)" },
+                  labelBgStyle: { fill: "#0d1713", fillOpacity: 0.96 },
+                  labelBgPadding: [5, 3] as [number, number],
+                  labelBgBorderRadius: 4,
+                }
+              : {}),
             markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
           };
         }),
@@ -288,6 +314,54 @@ function CanvasInner({
   );
 }
 
+function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
+  const payment = [...nodes]
+    .reverse()
+    .find(
+      (node) =>
+        node.toolCall?.name === "pay_confidentially" && node.toolCall.input.mode !== "public",
+    );
+  if (!payment) return null;
+
+  const receipt = paymentReceipt(payment);
+  const failed = payment.status === "blocked" || payment.toolResult?.status === "failed";
+  const steps = receipt
+    ? ["Amount → ciphertext", "ZK proofs verified", "Devnet settled", "Raw bytes: plaintext absent"]
+    : failed
+      ? ["Confidential transfer stopped before verification"]
+      : ["Building ciphertext and proofs…"];
+
+  return (
+    <aside className={`xprivacy-trace${receipt ? " is-verified" : failed ? " is-failed" : " is-running"}`}>
+      <div className="xprivacy-trace-title">
+        <LockKey className="xprivacy-trace-lock" aria-hidden="true" size={17} weight="duotone" />
+        <span>
+          <strong>Privacy trace</strong>
+          <small>{receipt ? "On-chain evidence linked" : failed ? "Not verified" : "Verifying on devnet"}</small>
+        </span>
+      </div>
+      <ol>
+        {steps.map((step) => (
+          <li key={step}>
+            <CheckCircle aria-hidden="true" size={13} weight={receipt ? "fill" : "regular"} />
+            {step}
+          </li>
+        ))}
+      </ol>
+      {receipt && (
+        <a
+          href={`https://explorer.solana.com/tx/${receipt.signature}?cluster=devnet`}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Trace transaction
+          <ArrowSquareOut aria-hidden="true" size={13} />
+        </a>
+      )}
+    </aside>
+  );
+}
+
 export function ExecutionGraphCanvas(props: ExecutionGraphCanvasProps) {
   return (
     <div className={`xgraph-canvas-shell${props.focusMode ? " is-focus" : ""}`}>
@@ -301,6 +375,7 @@ export function ExecutionGraphCanvas(props: ExecutionGraphCanvasProps) {
           </p>
         )}
       </div>
+      <PrivacyTrace nodes={props.nodes} />
       {/*
         A strip below the canvas rather than an overlay inside it. As an
         overlay the legend sat on top of live nodes — an explanation of the

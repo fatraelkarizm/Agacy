@@ -36,6 +36,68 @@ export default function ProofPage() {
         </p>
       </div>
 
+      <section className="encryption-proof" aria-labelledby="encryption-proof-title">
+        <div className="encryption-proof-head">
+          <div>
+            <div className="step-index">Cryptographic proof chain</div>
+            <h3 id="encryption-proof-title">Don&apos;t trust the UI. Check the chain.</h3>
+          </div>
+          <span className="encryption-proof-status">4 protected fields verified</span>
+        </div>
+
+        <div className="encryption-proof-flow">
+          <ProofStep
+            number="01"
+            title="Known plaintext"
+            detail={`${formatTokens(devnetProof.transferAmount)} tokens plus a known reasoning sentence.`}
+          />
+          <ProofStep
+            number="02"
+            title="Committed to devnet"
+            detail="A real Token-2022 confidential transfer and encrypted memo landed on-chain."
+          />
+          <ProofStep
+            number="03"
+            title="Public bytes inspected"
+            detail="Neither the amount nor the reasoning plaintext appears in the raw account or transaction bytes."
+          />
+          <ProofStep
+            number="04"
+            title="Owner-key readback"
+            detail="An independent devnet transfer decrypts to sender 7.5 and recipient 2.5 tokens from chain."
+          />
+        </div>
+
+        <div className="privacy-boundary" aria-label="Agacy privacy boundary">
+          <PrivacyBoundaryItem
+            label="Transfer amount & balances"
+            technology="Token-2022 confidential transfer / ElGamal"
+            isPrivate
+          />
+          <PrivacyBoundaryItem
+            label="Agent reasoning"
+            technology="Owner-key ciphertext in Memo"
+            isPrivate
+          />
+          <PrivacyBoundaryItem
+            label="Spend limits"
+            technology="ElGamal + verified range proofs"
+            isPrivate
+          />
+          <PrivacyBoundaryItem
+            label="Addresses, mint, timing & fees"
+            technology="Visible Solana metadata"
+            isPrivate={false}
+          />
+        </div>
+
+        <div className="encryption-proof-links">
+          <ProofItem label="Inspect transfer" value={devnetProof.transferSignature} isTx />
+          <ProofItem label="Inspect encrypted reasoning" value={devnetProof.reasoningMemoSignature} isTx />
+          <ProofItem label="Inspect owner-key readback" value={custodyProof.signatures.confidentialTransfer} isTx />
+        </div>
+      </section>
+
       <div className="proof-grid">
         <ProofItem label="Transfer transaction" value={devnetProof.transferSignature} isTx />
         <ProofItem label="Confidential mint" value={devnetProof.mint} />
@@ -236,6 +298,40 @@ export default function ProofPage() {
           is untraceable: addresses, mint and timing stay visible. Hidden is the amount, the
           reasoning, and the budget.
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ProofStep({ number, title, detail }: { number: string; title: string; detail: string }) {
+  return (
+    <div className="encryption-proof-step">
+      <span className="encryption-proof-number">{number}</span>
+      <div>
+        <strong>{title}</strong>
+        <p>{detail}</p>
+      </div>
+    </div>
+  );
+}
+
+function PrivacyBoundaryItem({
+  label,
+  technology,
+  isPrivate,
+}: {
+  label: string;
+  technology: string;
+  isPrivate: boolean;
+}) {
+  return (
+    <div className="privacy-boundary-item">
+      <span className={`privacy-boundary-state ${isPrivate ? "is-private" : "is-public"}`}>
+        {isPrivate ? "Encrypted" : "Public"}
+      </span>
+      <div>
+        <strong>{label}</strong>
+        <span>{technology}</span>
       </div>
     </div>
   );
