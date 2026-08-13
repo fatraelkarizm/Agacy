@@ -10,6 +10,20 @@
   --violet: #7259ee;
   --violet-bright: #9580ff;
   --violet-glow: rgba(114, 89, 238, 0.34);
+  /*
+    Graph node ramp. Node *kind* is taxonomy, not status, so it gets lightness
+    steps of the one brand hue rather than a colour each — the earlier version
+    invented blue, amber and teal, which made seven competing hues on screen and
+    implied a meaning the colours did not carry. Only success and refusal get
+    their own hue below, because those are the two things a viewer must be able
+    to read at a glance without consulting a legend.
+  */
+  --violet-ramp-1: #cdc2ff;
+  --violet-ramp-2: #a68cff;
+  --violet-ramp-3: #8264ee;
+  --violet-ramp-4: #6a4fd6;
+  /* AIsa's own brand orange, taken from their logo mark. */
+  --aisa: #f76918;
   --exposed: #ff5c7a;
   --exposed-dim: rgba(255, 92, 122, 0.1);
   --private: #4ade9b;
@@ -1163,193 +1177,700 @@ button.primary:hover:not(:disabled) {
 
 .step-refused .step-kind, .step-refused .step-text { color: var(--exposed); }
 
-/* ---------- full-screen agent canvas ---------- */
+/* ---------- agent execution graph workspace ---------- */
 
-.agent-canvas {
-  position: fixed;
-  inset: 0;
-  z-index: 20;
-  min-height: 100dvh;
-  overflow: hidden;
-  background: #060608;
-  color: #f4f2fa;
-  cursor: crosshair;
-  user-select: none;
+.xgraph {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
-.agent-canvas-edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-.agent-canvas-edge { stroke: rgba(210, 206, 222, 0.28); stroke-width: 0.18; vector-effect: non-scaling-stroke; }
-.agent-canvas-edge-running { stroke: rgba(153, 127, 255, 0.9); stroke-width: 0.32; animation: agent-edge-breathe 1.1s ease-in-out infinite; }
-.agent-canvas-edge-blocked { stroke: rgba(255, 92, 122, 0.72); }
+/*
+  The graph is the only dashboard section that needs to own the viewport
+  height — a canvas that scrolls with the page cannot be panned. Scoped with
+  :has() so the other sections keep the ordinary document flow instead of
+  every one of them inheriting a height they do not want.
+*/
+.dashboard-main:has(.xgraph) { display: grid; grid-template-rows: auto minmax(0, 1fr); height: 100dvh; }
+.dashboard-content:has(.xgraph) { display: flex; width: 100%; min-height: 0; padding-bottom: 22px; }
 
-.agent-canvas-core {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 4;
+.xgraph-head {
   display: grid;
-  place-items: center;
-  width: 96px;
-  height: 96px;
-  padding: 0;
-  transform: translate(-50%, -50%);
-  border: 2px solid #9a7dff;
-  border-radius: 50%;
-  background: #0d0c10;
-  color: #f7f4ff;
-  font-size: 0.83rem;
-  font-weight: 560;
-  letter-spacing: -0.02em;
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.46);
+  grid-template-columns: 1fr auto;
+  gap: 4px 18px;
+  align-items: center;
 }
 
-.agent-canvas-core:hover,
-.agent-canvas-core.selected { background: #121017; border-color: #c6b8ff; }
-.agent-canvas-core.running { animation: agent-core-breathe 1.25s ease-in-out infinite; }
+.xgraph-title { display: flex; align-items: center; gap: 11px; }
+.xgraph-title h2 { font-size: 1.16rem; font-weight: 600; letter-spacing: -0.02em; }
 
-.agent-canvas-node {
-  position: absolute;
-  left: var(--node-x);
-  top: var(--node-y);
-  z-index: 3;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  transform: translate(-50%, -50%);
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  overflow: visible;
-  animation: agent-node-arrive 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+.xgraph-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-faint);
+  font-size: 0.66rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.agent-canvas-node:hover { background: transparent; transform: translate(-50%, -50%) scale(1.08); }
-.agent-canvas-node-dot {
-  display: block;
-  width: max(6px, calc(15px - var(--node-depth) * 2px));
-  height: max(6px, calc(15px - var(--node-depth) * 2px));
-  border: 1px solid rgba(240, 237, 248, 0.72);
-  border-radius: 50%;
-  background: #8e8998;
-  box-shadow: 0 0 0 2px rgba(6, 6, 8, 0.9);
-}
+.xgraph-live span { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.xgraph-live.is-running { border-color: rgba(74, 222, 155, 0.4); color: var(--private); }
+.xgraph-live.is-running span { animation: xpulse 1.3s ease-in-out infinite; }
 
-.agent-canvas-node-goal .agent-canvas-node-dot,
-.agent-canvas-node-policy .agent-canvas-node-dot { border-color: #a68cff; background: #6f4be0; }
-.agent-canvas-node-tool .agent-canvas-node-dot { background: #d4d0dd; }
-.agent-canvas-node-complete .agent-canvas-node-dot,
-.agent-canvas-node-result .agent-canvas-node-dot { border-color: #dcd8e5; background: #f0edf5; }
-.agent-canvas-node-blocked .agent-canvas-node-dot { border-color: #ff8da4; background: #d84264; }
-.agent-canvas-node-running .agent-canvas-node-dot { border-color: #b9a7ff; background: #8c6df2; animation: agent-dot-breathe 0.9s ease-in-out infinite; }
-.agent-canvas-node.selected .agent-canvas-node-dot { box-shadow: 0 0 0 4px rgba(166, 140, 255, 0.18); }
-
-.agent-canvas-node-label {
-  position: absolute;
-  left: 27px;
-  top: 50%;
-  max-width: 190px;
+.xgraph-goal {
+  grid-column: 1;
   overflow: hidden;
-  transform: translateY(-50%);
-  color: rgba(244, 242, 250, 0.82);
-  font-family: var(--mono);
-  font-size: 0.61rem;
-  line-height: 1.35;
-  opacity: 0;
-  pointer-events: none;
-  text-align: left;
+  color: var(--text-dim);
+  font-size: 0.78rem;
   text-overflow: ellipsis;
-  text-shadow: 0 2px 8px #060608;
   white-space: nowrap;
 }
 
-.agent-canvas-node:hover .agent-canvas-node-label,
-.agent-canvas-node-running .agent-canvas-node-label,
-.agent-canvas-node-blocked .agent-canvas-node-label { opacity: 1; }
-.agent-canvas-node.selected .agent-canvas-node-label { opacity: 0; }
-.agent-canvas-node.edge-right .agent-canvas-node-label { left: auto; right: 27px; text-align: right; }
+.xgraph-actions { grid-row: 1 / span 2; grid-column: 2; display: flex; gap: 8px; }
 
-.agent-canvas-detail {
-  position: absolute;
-  left: var(--detail-x);
-  top: var(--detail-y);
-  z-index: 5;
-  width: min(270px, calc(100vw - 40px));
-  padding: 28px 0 0 28px;
-  pointer-events: none;
-  text-shadow: 0 2px 12px #060608;
+.xgraph-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-dim);
+  font-size: 0.76rem;
+  transition: border-color 0.16s ease, color 0.16s ease;
 }
 
-.agent-canvas-detail strong { display: block; font-size: 0.72rem; font-weight: 580; }
-.agent-canvas-detail p { margin-top: 5px; color: rgba(210, 206, 222, 0.7); font-size: 0.65rem; line-height: 1.5; }
-.agent-canvas-detail.edge-right { padding: 28px 28px 0 0; transform: translateX(-100%); text-align: right; }
+.xgraph-actions button:hover:not(:disabled) { border-color: var(--border-bright); color: var(--text); }
+.xgraph-actions button.is-active { border-color: var(--border-bright); color: var(--violet-bright); }
+.xgraph-actions button.primary { border-color: transparent; background: var(--violet); color: #fff; }
+.xgraph-actions button.primary:hover:not(:disabled) { background: var(--violet-bright); }
+.xgraph-actions button:disabled { opacity: 0.4; }
 
-.agent-canvas-composer {
-  position: absolute;
-  right: 32px;
-  top: 50%;
-  z-index: 8;
-  width: min(420px, calc(100vw - 40px));
-  min-height: 170px;
-  transform: translateY(-50%);
-  border: 1px solid rgba(216, 211, 228, 0.36);
+/* ---- stat cards ---- */
+
+.xstats {
+  display: grid;
+  /*
+    auto-fit rather than a fixed count: the card set grows when a tool source is
+    added, and a hardcoded column count leaves the last card stranded on its own
+    row eating the canvas's height.
+  */
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.xstat {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(18, 17, 21, 0.96);
-  box-shadow: 0 25px 70px rgba(0, 0, 0, 0.55);
+  background: var(--surface);
 }
 
-.agent-canvas-composer textarea {
-  width: 100%;
-  min-height: 170px;
-  resize: none;
-  padding: 22px 58px 22px 22px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #f4f2fa;
-  font-family: var(--mono);
-  font-size: 0.86rem;
-  line-height: 1.55;
+.xstat-label {
+  display: block;
+  color: var(--text-faint);
+  font-size: 0.63rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
 }
 
-.agent-canvas-composer textarea::placeholder { color: rgba(210, 206, 222, 0.45); }
-.agent-canvas-composer textarea:focus { box-shadow: inset 0 0 0 1px rgba(166, 140, 255, 0.48); }
-.agent-canvas-composer button {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
+.xstat strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 5px 0 2px;
+  font-size: 1.22rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.xstat small { color: var(--text-faint); font-size: 0.68rem; }
+.xstat-live { color: var(--private); }
+.xstat-good { color: var(--private); }
+.xstat-confidential { font-family: var(--mono); font-size: 1.02rem !important; }
+
+.xstat-reveal {
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border: 0;
-  border-radius: 50%;
+  border: 1px solid var(--border);
+  border-radius: 6px;
   background: transparent;
-  color: #a68cff;
+  color: var(--text-dim);
 }
 
-.agent-canvas-composer button:hover:not(:disabled) { background: rgba(166, 140, 255, 0.1); }
-.agent-canvas-composer button:disabled { opacity: 0.28; }
-.agent-canvas-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.xstat-reveal:hover { border-color: var(--border-bright); color: var(--text); }
 
-@keyframes agent-node-arrive { from { opacity: 0; transform: translate(-50%, -50%) scale(0.2); } to { opacity: 1; transform: translate(-50%, -50%) scale(1); } }
-@keyframes agent-edge-breathe { 50% { opacity: 0.35; } }
-@keyframes agent-dot-breathe { 50% { transform: scale(1.35); } }
-@keyframes agent-core-breathe { 50% { box-shadow: 0 0 0 12px rgba(142, 111, 255, 0.08), 0 18px 55px rgba(0, 0, 0, 0.46); } }
+/* ---- stage ---- */
 
-@media (max-width: 640px) {
-  .agent-canvas-core { width: 82px; height: 82px; }
-  .agent-canvas-composer { right: 20px; bottom: 20px; top: auto; transform: none; }
-  .agent-canvas-detail { display: none; }
+.xgraph-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  flex: 1;
+}
+
+.xgraph.has-detail .xgraph-stage { grid-template-columns: minmax(0, 1fr) 306px; }
+
+.xgraph-main {
+  display: grid;
+  /*
+    The canvas floor lives on this *track*, never on the shell inside it. A
+    `min-height` on the item does not grow its track — the item just overflows
+    downward and paints over the next row, which is how the legend ended up
+    under the nodes and then the log ended up under the legend. Same bug twice,
+    one level apart. Sizing the track is what actually reserves the space.
+  */
+  grid-template-rows: minmax(340px, 1fr) auto auto;
+  gap: 12px;
+  min-height: 0;
+  /*
+    Scrolls inside its own column instead of pushing the page. The graph shell
+    is pinned to 100dvh, so anything that grows here — expanding the boundary
+    panel, a long log — otherwise overflowed into a document scroll that pushed
+    the header and toolbar off screen, and stole height from the canvas at the
+    same time. The canvas keeps its own floor above, so it stays usable while
+    the panels below scroll.
+  */
+  overflow-y: auto;
+}
+
+.xgraph-canvas-shell {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 8px;
+  /*
+    The floor lives on the shell, not the canvas. With `min-height` on the
+    canvas itself, the item stayed taller than its own 1fr track and overflowed
+    downward by exactly the legend's height — putting the legend back underneath
+    the nodes, which is the thing moving it out of the canvas was meant to fix.
+    The floor is set on the `.xgraph-main` track above instead.
+  */
+  min-height: 0;
+}
+
+.xgraph-canvas {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(12, 11, 22, 0.92), rgba(8, 7, 17, 0.95));
+}
+
+.xgraph-empty {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 40px 24px;
+  min-height: 320px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.xgraph-empty h3 { font-size: 0.98rem; font-weight: 600; }
+.xgraph-empty p { max-width: 44ch; color: var(--text-dim); font-size: 0.79rem; }
+
+.xgraph-empty button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 4px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--violet);
+  color: #fff;
+  font-size: 0.79rem;
+}
+
+.xgraph-empty button:hover { background: var(--violet-bright); }
+
+.xgraph-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 16px;
+  padding: 8px 13px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  list-style: none;
+}
+
+.xgraph-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-dim);
+  font-size: 0.65rem;
+}
+
+.xgraph-legend-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.xgraph-legend-goal { color: var(--violet-ramp-1); }
+.xgraph-legend-llm { color: var(--violet-ramp-2); }
+.xgraph-legend-observe { color: var(--violet-ramp-3); }
+.xgraph-legend-tool { color: var(--violet-ramp-4); }
+.xgraph-legend-policy { color: var(--violet-ramp-4); }
+.xgraph-legend-result { color: var(--private); }
+.xgraph-legend-blocked { color: var(--exposed); }
+
+/* ---- focus mode ---- */
+
+/*
+  Focus mode buys the canvas the vertical space the stat cards and log were
+  using. It is a display state only — nothing about the run changes, and the
+  detail panel deliberately stays mounted so clicking a node still inspects it.
+*/
+.xgraph.is-focus .xstats,
+.xgraph.is-focus .xlog { display: none; }
+.xgraph.is-focus .xgraph-main { grid-template-rows: minmax(0, 1fr); }
+.xgraph-canvas-shell.is-focus .xgraph-canvas { border-color: var(--border-bright); }
+
+.xgraph-focus-hint {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  z-index: 5;
+  padding: 5px 12px;
+  transform: translateX(-50%);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(9, 8, 16, 0.88);
+  color: var(--text-faint);
+  font-size: 0.66rem;
+  backdrop-filter: blur(6px);
+}
+
+.xnode.is-dimmed { opacity: 0.14; filter: saturate(0.25); }
+.xnode.is-dimmed:hover { opacity: 0.5; }
+.xgraph-canvas .xedge-dimmed .react-flow__edge-path { opacity: 0.1; }
+.xgraph-canvas .xedge-dimmed .react-flow__arrowhead * { opacity: 0.1; }
+
+/* ---- node cards ---- */
+
+.xnode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--text-faint);
+  border-radius: 10px;
+  background: rgba(19, 17, 32, 0.96);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+  cursor: pointer;
+  transition: border-color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.xnode:hover { transform: translateY(-1px); box-shadow: 0 12px 30px rgba(0, 0, 0, 0.46); }
+.xnode.is-selected { border-color: var(--border-bright); box-shadow: 0 0 0 2px var(--violet-glow), 0 12px 30px rgba(0, 0, 0, 0.46); }
+
+.xnode-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); }
+.xnode-body { display: grid; gap: 2px; min-width: 0; }
+
+.xnode-label {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 550;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xnode-meta { display: flex; align-items: center; gap: 7px; min-width: 0; }
+
+.xnode-kind {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xnode-duration { flex: none; color: var(--text-faint); font-family: var(--mono); font-size: 0.6rem; }
+.xnode-status { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--text-faint); }
+.xnode-status-dot-done { background: var(--private); }
+.xnode-status-dot-blocked { background: var(--exposed); }
+.xnode-status-dot-running { background: var(--violet-bright); animation: xpulse 0.9s ease-in-out infinite; }
+.xnode-status-dot-queued { background: rgba(172, 168, 189, 0.45); }
+
+.xnode-agent { border-left-color: var(--violet-ramp-1); }
+.xnode-agent .xnode-icon { color: var(--violet-ramp-1); }
+.xnode-goal { border-left-color: var(--violet-ramp-1); }
+.xnode-goal .xnode-icon { color: var(--violet-ramp-1); }
+.xnode-llm { border-left-color: var(--violet-ramp-2); }
+.xnode-llm .xnode-icon { color: var(--violet-ramp-2); }
+.xnode-observe { border-left-color: var(--violet-ramp-3); }
+.xnode-observe .xnode-icon { color: var(--violet-ramp-3); }
+.xnode-tool { border-left-color: var(--violet-ramp-4); }
+.xnode-tool .xnode-icon { color: var(--violet-ramp-4); }
+.xnode-policy { border-left-color: var(--violet-ramp-4); }
+.xnode-policy .xnode-icon { color: var(--violet-ramp-4); }
+.xnode-result { border-left-color: var(--private); }
+.xnode-result .xnode-icon { color: var(--private); }
+.xnode-blocked { border-left-color: var(--exposed); border-style: dashed; background: rgba(38, 16, 24, 0.9); }
+.xnode-blocked .xnode-icon { color: var(--exposed); }
+.xnode-status-running { border-color: var(--border-bright); }
+
+/* React Flow hooks up its own handles; they are structural, not decorative. */
+.xgraph-canvas .react-flow__handle { width: 1px; height: 1px; min-width: 0; min-height: 0; border: 0; background: transparent; opacity: 0; }
+.xgraph-canvas .react-flow__edge-path { stroke: rgba(144, 126, 246, 0.34); stroke-width: 1.4; }
+.xgraph-canvas .xedge-running .react-flow__edge-path { stroke: var(--violet-bright); stroke-width: 2; }
+.xgraph-canvas .xedge-blocked .react-flow__edge-path { stroke: rgba(255, 92, 122, 0.6); stroke-dasharray: 5 4; }
+.xgraph-canvas .xedge-queued .react-flow__edge-path { stroke: rgba(144, 126, 246, 0.2); stroke-dasharray: 4 4; }
+.xgraph-canvas .react-flow__arrowhead * { fill: rgba(144, 126, 246, 0.5); stroke: none; }
+.xgraph-canvas .react-flow__controls { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; box-shadow: none; }
+.xgraph-canvas .react-flow__controls-button { border: 0; border-bottom: 1px solid var(--border); background: rgba(15, 13, 26, 0.94); fill: var(--text-dim); }
+.xgraph-canvas .react-flow__controls-button:hover { background: rgba(28, 24, 46, 0.96); fill: var(--text); }
+
+/* ---- detail panel ---- */
+
+.xdetail {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.xdetail-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.xdetail-head h3 { margin-top: 6px; font-size: 0.88rem; font-weight: 600; line-height: 1.35; }
+
+.xdetail-head > button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-dim);
+}
+
+.xdetail-head > button:hover { border-color: var(--border-bright); color: var(--text); }
+
+.xdetail-kind {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.xdetail-kind-agent,
+.xdetail-kind-goal { color: var(--violet-ramp-1); border-color: rgba(205, 194, 255, 0.35); }
+.xdetail-kind-llm { color: var(--violet-ramp-2); border-color: rgba(166, 140, 255, 0.35); }
+.xdetail-kind-observe { color: var(--violet-ramp-3); border-color: rgba(130, 100, 238, 0.4); }
+.xdetail-kind-tool,
+.xdetail-kind-policy { color: var(--violet-ramp-4); border-color: rgba(106, 79, 214, 0.45); }
+.xdetail-kind-result { color: var(--private); border-color: rgba(74, 222, 155, 0.35); }
+.xdetail-kind-blocked { color: var(--exposed); border-color: rgba(255, 92, 122, 0.35); }
+
+.xdetail-facts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.xdetail-facts dt { color: var(--text-faint); font-size: 0.63rem; letter-spacing: 0.05em; text-transform: uppercase; }
+.xdetail-facts dd { margin-top: 3px; font-size: 0.76rem; }
+
+.xdetail-section { display: grid; gap: 6px; padding-top: 12px; border-top: 1px solid var(--border); }
+.xdetail-section h4 { color: var(--text-faint); font-size: 0.63rem; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; }
+.xdetail-section p { color: var(--text-dim); font-size: 0.76rem; line-height: 1.55; overflow-wrap: anywhere; }
+.xdetail-tool { color: var(--violet-ramp-2) !important; font-family: var(--mono); font-size: 0.72rem !important; }
+
+.xdetail-code {
+  overflow-x: auto;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(6, 6, 12, 0.6);
+  color: var(--text-dim);
+  font-family: var(--mono);
+  font-size: 0.66rem;
+  line-height: 1.5;
+}
+
+.xdetail-result { font-family: var(--mono); font-size: 0.72rem !important; text-transform: uppercase; }
+.xdetail-result-succeeded { color: var(--private) !important; }
+.xdetail-result-refused, .xdetail-result-blocked, .xdetail-result-failed { color: var(--exposed) !important; }
+
+.xdetail-link { display: inline-flex; align-items: center; gap: 5px; color: var(--violet-bright); font-size: 0.73rem; }
+
+/* ---- status pill ---- */
+
+.xpill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  text-transform: capitalize;
+}
+
+.xpill-done { background: var(--private-dim); color: var(--private); }
+.xpill-blocked { background: var(--exposed-dim); color: var(--exposed); }
+.xpill-running { background: rgba(114, 89, 238, 0.16); color: var(--violet-bright); }
+.xpill-queued { background: rgba(172, 168, 189, 0.12); color: var(--text-faint); }
+
+/* ---- execution log ---- */
+
+.xlog {
+  display: flex;
+  flex-direction: column;
+  max-height: 218px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.xlog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.xlog-head h3 { font-size: 0.78rem; font-weight: 600; }
+.xlog-head span { color: var(--text-faint); font-size: 0.68rem; }
+.xlog-empty { padding: 20px 15px; color: var(--text-faint); font-size: 0.76rem; }
+.xlog-list { overflow-y: auto; list-style: none; }
+
+.xlog-list button {
+  display: grid;
+  grid-template-columns: auto auto minmax(90px, 190px) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 15px;
+  border: 0;
+  border-bottom: 1px solid rgba(144, 126, 246, 0.08);
+  background: transparent;
+  text-align: left;
+}
+
+.xlog-list button:hover { background: rgba(144, 126, 246, 0.06); }
+.xlog-time { color: var(--text-faint); font-family: var(--mono); font-size: 0.68rem; }
+.xlog-label { overflow: hidden; color: var(--text); font-size: 0.74rem; text-overflow: ellipsis; white-space: nowrap; }
+.xlog-detail { overflow: hidden; color: var(--text-faint); font-size: 0.71rem; text-overflow: ellipsis; white-space: nowrap; }
+.xlog-duration { color: var(--text-faint); font-family: var(--mono); font-size: 0.68rem; }
+
+/* ---- AIsa provenance ---- */
+
+/*
+  Provenance chip: which gateway the call left through, and whose data came
+  back. Carries AIsa's own #F76918 rather than the app's violet — attribution
+  should look like the party being attributed, and against a violet UI the
+  orange also separates "this figure came from outside" from every node that
+  did not.
+*/
+.xnode-provider,
+.xdetail-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: none;
+  padding: 1px 5px;
+  border: 1px solid rgba(247, 105, 24, 0.42);
+  border-radius: 4px;
+  background: rgba(247, 105, 24, 0.09);
+  color: var(--aisa);
+  font-family: var(--mono);
+  font-size: 0.53rem;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.xnode-provider img,
+.xdetail-provider img { display: block; flex: none; border-radius: 2px; }
+.xnode-provider-sep,
+.xdetail-provider-sep { opacity: 0.55; }
+.xdetail-provider { margin-left: 8px; font-size: 0.55rem; }
+.xstat-aisa { color: var(--aisa); }
+/* Dimmed nodes must not keep a bright orange chip shouting through focus mode. */
+.xnode.is-dimmed .xnode-provider { border-color: rgba(247, 105, 24, 0.2); background: transparent; }
+
+/* ---- redaction affordances ---- */
+
+.xdetail-withheld,
+.xlog-redacted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-faint) !important;
+  font-size: 0.72rem !important;
+}
+
+.xlog-redacted { font-size: 0.71rem !important; }
+
+/* ---- model-provider boundary ---- */
+
+.xboundary {
+  padding: 10px 15px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.xboundary > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.xboundary > summary::-webkit-details-marker { display: none; }
+.xboundary > summary svg { color: var(--violet-bright); }
+.xboundary > summary::after { content: "▾"; margin-left: auto; color: var(--text-faint); font-size: 0.7rem; }
+.xboundary[open] > summary::after { content: "▴"; }
+.xboundary[open] > summary { margin-bottom: 12px; }
+
+.xboundary-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+
+.xboundary-label {
+  margin-bottom: 5px;
+  color: var(--text-faint);
+  font-size: 0.63rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.xboundary-grid ul { list-style: none; display: grid; gap: 3px; }
+
+.xboundary-grid li {
+  position: relative;
+  padding-left: 13px;
+  color: var(--text-dim);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.xboundary-grid li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0.52em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--violet-ramp-3);
+}
+
+.xboundary-grid > div:last-child li::before { background: var(--private); }
+
+.xboundary-note {
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  color: var(--text-faint);
+  font-size: 0.7rem;
+}
+
+/* ---- composer ---- */
+
+.xcomposer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 4, 9, 0.66);
+  backdrop-filter: blur(3px);
+}
+
+.xcomposer {
+  display: grid;
+  gap: 10px;
+  width: min(560px, 100%);
+  padding: 18px;
+  border: 1px solid var(--border-bright);
+  border-radius: 14px;
+  background: #100e1c;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6);
+}
+
+.xcomposer label { color: var(--text-dim); font-size: 0.76rem; }
+
+.xcomposer textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: rgba(6, 6, 12, 0.6);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  line-height: 1.55;
+  outline: 0;
+}
+
+.xcomposer textarea:focus { border-color: var(--border-bright); }
+.xcomposer-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.xcomposer-foot span { color: var(--text-faint); font-size: 0.68rem; }
+
+.xcomposer-foot button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--violet);
+  color: #fff;
+  font-size: 0.79rem;
+}
+
+.xcomposer-foot button:hover:not(:disabled) { background: var(--violet-bright); }
+.xcomposer-foot button:disabled { opacity: 0.35; }
+
+.xgraph-live-region { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+@keyframes xpulse { 50% { opacity: 0.35; } }
+
+@media (max-width: 1180px) {
+  .xgraph.has-detail .xgraph-stage { grid-template-columns: minmax(0, 1fr); }
+  .xdetail { max-height: 300px; }
+}
+
+@media (max-width: 760px) {
+  .xgraph-head { grid-template-columns: minmax(0, 1fr); }
+  .xgraph-actions { grid-row: auto; grid-column: 1; flex-wrap: wrap; }
+  .xlog-list button { grid-template-columns: auto auto minmax(0, 1fr); }
+  .xlog-detail, .xlog-duration { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-canvas-core.running,
-  .agent-canvas-edge-running,
-  .agent-canvas-node,
-  .agent-canvas-node-running .agent-canvas-node-dot { animation: none; }
+  .xnode, .xnode-status-dot-running, .xgraph-live.is-running span { animation: none; transition: none; }
+  .xgraph-canvas .react-flow__edge.animated .react-flow__edge-path { animation: none; }
 }
 
 /* ---------- agent swarm graph ---------- */

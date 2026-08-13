@@ -106,3 +106,55 @@ describe("observation memory and the privacy boundary", () => {
     ).toBe(true);
   });
 });
+
+/**
+ * Web research is the only tool whose output length is set by third parties.
+ * Three real news headlines are enough to push the carried observation past the
+ * schema's 400-character cap, and the failure surfaces one expansion later as
+ * "Invalid agent graph request" — nowhere near the tool that caused it.
+ */
+describe("web research observations stay inside the schema's limit", () => {
+  const longResults = Array.from({ length: 3 }, (_, index) => ({
+    title:
+      `${index} Drift Protocol Exploit: Why "Social Trust" Is the Newest Cybersecurity Gap ` +
+      "| Crowell & Moring LLP | Extended Coverage And Analysis",
+    url: `https://example.com/a-fairly-long-article-url-number-${index}`,
+    excerpt: "x".repeat(240),
+  }));
+
+  it("fits even when every headline is oversized", async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(JSON.stringify({ query: "solana incident", results: longResults }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })) as typeof globalThis.fetch;
+
+    try {
+      const result = await executeAgentGraphTool({
+        call: { name: "research_counterparty", input: { query: "recent Solana security incidents" } },
+        ownerGoal: "Check before paying a vendor.",
+        client,
+        ownerAddress,
+        policy: null,
+        policyAccount: null,
+        agentSigner: null,
+        spentThisPeriod: 0n,
+      });
+
+      expect(result.status).toBe("succeeded");
+
+      const observation = `research_counterparty -> ${result.status}: ${result.modelSummary}`;
+      expect(
+        agentGraphExpansionRequestSchema.safeParse(baseRequest({ observations: [observation] })).success,
+        `Observation was ${observation.length} characters; the schema caps an entry at 400.`,
+      ).toBe(true);
+
+      // The owner-facing summary is not carried anywhere, so it keeps the links
+      // that make each headline checkable.
+      expect(result.summary).toContain("https://example.com/");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});

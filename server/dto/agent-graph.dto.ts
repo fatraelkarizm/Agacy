@@ -12,7 +12,10 @@ export type AgentGraphToolName =
   | "check_on_chain_policy"
   | "authorize_policy_spend"
   | "get_token_price"
-  | "get_swap_quote";
+  | "get_swap_quote"
+  | "cross_check_token_price"
+  | "research_counterparty"
+  | "pay_confidentially";
 
 export type AgentGraphToolCallDTO =
   | {
@@ -28,9 +31,21 @@ export type AgentGraphToolCallDTO =
       };
     }
   | {
-      readonly name: "get_token_price";
+      readonly name: "get_token_price" | "cross_check_token_price";
       readonly input: {
         readonly mint: string;
+      };
+    }
+  | {
+      readonly name: "research_counterparty";
+      readonly input: {
+        readonly query: string;
+      };
+    }
+  | {
+      readonly name: "pay_confidentially";
+      readonly input: {
+        readonly amountTokens: number;
       };
     }
   | {

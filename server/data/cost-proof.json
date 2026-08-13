@@ -1,0 +1,37 @@
+{
+  "capturedAt": "2026-08-13T06:37:38.948Z",
+  "cluster": "devnet",
+  "transferAmount": "2500000",
+  "decimals": 6,
+  "publicPath": {
+    "setup": {
+      "label": "setup",
+      "lamports": 5575160,
+      "transactions": 4,
+      "milliseconds": 5202
+    },
+    "perPayment": {
+      "label": "one payment",
+      "lamports": 5000,
+      "transactions": 1,
+      "milliseconds": 873
+    }
+  },
+  "confidentialPath": {
+    "setup": {
+      "label": "setup",
+      "lamports": 10831040,
+      "transactions": 6,
+      "milliseconds": 6561
+    },
+    "perPayment": {
+      "label": "one payment",
+      "lamports": 45000,
+      "transactions": 6,
+      "milliseconds": 21565
+    }
+  },
+  "perPaymentPremiumLamports": 40000,
+  "perPaymentPremiumSol": 0.00004,
+  "note": "Costs are payer balance deltas, so they include proof context account rent and its refund on close. Latency is wall clock against a Helius devnet RPC and will vary with the endpoint."
+}

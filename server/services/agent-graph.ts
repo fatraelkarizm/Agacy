@@ -55,6 +55,12 @@ export const GRAPH_EXCLUDED_TOOLKIT_TOOLS: Record<string, string> = {
 export const GRAPH_ONLY_TOOLS: Record<string, string> = {
   authorize_policy_spend:
     "Signs an authorize against the deployed policy program using the browser session's agent key, which the CLI toolkit has no concept of.",
+  cross_check_token_price:
+    "Reaches AIsa through this app's own /api/aisa/price route, which holds the Bearer key server-side. The CLI toolkit has no Next.js route to call and would need the credential handed to it directly.",
+  research_counterparty:
+    "Reaches AIsa's web search through this app's own /api/aisa/research route, for the same credential reason as cross_check_token_price.",
+  pay_confidentially:
+    "Runs through this app's own /api/agent/confidential-payment route, which holds the funded devnet payer and the provisioned confidential mint. The browser session has neither — the same constraint that keeps pay_vendor_confidentially CLI-only above.",
 };
 
 export async function expandAgentGraph(
@@ -86,6 +92,10 @@ export async function expandAgentGraph(
         "Never claim an external action happened unless the lineage includes a real tool result proving it.",
         "When a listed tool is needed, emit kind=tool with its exact toolName and toolInput, then set expand=false. The runtime will validate and execute it before adding a factual result node.",
         "Never invent a toolName. authorize_policy_spend is not a token transfer and must never be described as payment completion.",
+        // Without this the model narrates the payment instead of making it: it
+        // emits a reason node saying "proceed with the confidential payment"
+        // and the run ends having moved nothing.
+        "When the owner asks to pay, send, settle, or renew something confidentially and pay_confidentially is available, emit kind=tool with toolName=pay_confidentially and the amount from the goal. Do not describe the payment in a reason node instead of calling the tool — a step that says a payment will happen is not a payment.",
         "Only call authorize_policy_spend when the owner goal explicitly supplies the amount and recipient; never invent either value.",
         "For goals about buying, pricing, or swapping a token, use get_token_price and get_swap_quote when they are available — they return real market data and let you make concrete progress instead of blocking immediately. Both are read-only research: they never execute a purchase.",
         "get_swap_quote requires a real base58 mint address for inputMint and outputMint (32-44 characters), never a ticker symbol like 'X' or 'BONK'. If the goal only names a token by symbol and does not supply its mint address, do not call get_swap_quote — emit a blocked node asking for the mint address instead of guessing one.",

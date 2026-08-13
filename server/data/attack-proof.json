@@ -1,0 +1,38 @@
+{
+  "capturedAt": "2026-08-13T06:38:46.287Z",
+  "cluster": "devnet",
+  "policyAccount": "6Zs6UU92CXSWAmA3Vr9w2WepBXMFijZD7MRfwcis6QjQ",
+  "limits": {
+    "maxPerTransfer": "20000000",
+    "maxPerPeriod": "50000000",
+    "periodSeconds": "3600"
+  },
+  "attacks": [
+    {
+      "step": "agent tries to give itself a bigger budget",
+      "expected": "error 6003, limit unchanged",
+      "observed": "6003, limit = 20000000",
+      "ok": true
+    },
+    {
+      "step": "an attacker signs with a different key",
+      "expected": "error 6003",
+      "observed": "6003",
+      "ok": true
+    },
+    {
+      "step": "agent pays more than the per-transfer cap",
+      "expected": "error 6001",
+      "observed": "6001",
+      "ok": true
+    },
+    {
+      "step": "agent splits the spend to get around the period budget",
+      "expected": "error 6002, total never above 50000000",
+      "observed": "6002, total = 40000000",
+      "ok": true
+    }
+  ],
+  "blocked": 4,
+  "total": 4
+}

@@ -475,23 +475,20 @@ export default function DashboardPage() {
     );
   }
 
-  if (dashboardSection === "graph") {
-    const availableTools: AgentGraphToolName[] = [
-      "get_wallet_overview",
-      "get_token_price",
-      "get_swap_quote",
-    ];
-    if (provisionedPolicy) availableTools.push("check_on_chain_policy");
-    if (policy && provisionedPolicy && agentSignerRef.current) {
-      availableTools.push("authorize_policy_spend");
-    }
-    return (
-      <AgentGraphArena
-        availableTools={availableTools}
-        onToolCall={runGraphTool}
-        onExit={() => setDashboardSection("overview")}
-      />
-    );
+  // The graph renders inside the dashboard shell rather than as a full-screen
+  // takeover, so the owner keeps the sidebar, the wallet chip, and a way out
+  // that is not a keyboard shortcut.
+  const availableTools: AgentGraphToolName[] = [
+    "get_wallet_overview",
+    "get_token_price",
+    "cross_check_token_price",
+    "research_counterparty",
+    "pay_confidentially",
+    "get_swap_quote",
+  ];
+  if (provisionedPolicy) availableTools.push("check_on_chain_policy");
+  if (policy && provisionedPolicy && agentSignerRef.current) {
+    availableTools.push("authorize_policy_spend");
   }
 
   const spent = executed.reduce((sum, e) => sum + e.amount, 0n);
@@ -526,7 +523,13 @@ export default function DashboardPage() {
       onProof={() => router.push("/proof")}
       onLanding={() => router.push("/")}
     >
-      {dashboardSection === "onboarding" ? (
+      {dashboardSection === "graph" ? (
+        <AgentGraphArena
+          availableTools={availableTools}
+          onToolCall={runGraphTool}
+          onExit={() => setDashboardSection("overview")}
+        />
+      ) : dashboardSection === "onboarding" ? (
         <AgentSetup
           draft={setupDraft}
           ownerWallet={ownerWallet}

@@ -1,4 +1,5 @@
 import "../tests/setup-env.js";
+import { writeFileSync } from "node:fs";
 import { generateKeyPairSigner } from "@solana/kit";
 import { createDevnetClient } from "../server/data/solana-client.js";
 import { loadOrCreatePayer } from "../server/data/solana-payer.js";
@@ -141,7 +142,32 @@ async function main(): Promise<void> {
   );
 
   const breached = results.filter((result) => !result.ok);
+
+  // Written whatever the outcome, including a breach. An evidence file that
+  // only appears when the defence held would not be evidence.
+  writeFileSync(
+    "server/data/attack-proof.json",
+    `${JSON.stringify(
+      {
+        capturedAt: new Date().toISOString(),
+        cluster: "devnet",
+        policyAccount,
+        limits: {
+          maxPerTransfer: MAX_PER_TRANSFER.toString(),
+          maxPerPeriod: MAX_PER_PERIOD.toString(),
+          periodSeconds: PERIOD_SECONDS.toString(),
+        },
+        attacks: results,
+        blocked: results.length - breached.length,
+        total: results.length,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
   console.log(`\n${results.length - breached.length}/${results.length} attacks blocked.`);
+  console.log("saved -> server/data/attack-proof.json");
   if (breached.length > 0) {
     throw new Error(`${breached.length} attack(s) got through: ${breached.map((b) => b.step).join("; ")}`);
   }

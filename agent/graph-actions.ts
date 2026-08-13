@@ -11,6 +11,8 @@ import { formatTokens } from "../server/services/demo-scenario";
 import { runAgentOnChain } from "../server/services/agent-run";
 import { evaluateSpendPolicy, fetchOnChainPolicyStatus } from "../server/services/spend-policy";
 import { fetchTokenPrice, fetchSwapQuote } from "./effects/jupiter";
+import { fetchAisaResearch, fetchAisaTokenPrice, priceDivergencePercent } from "./effects/aisa";
+import { payConfidentially } from "./effects/confidential-payment";
 
 /**
  * The Agent Graph's toolset, expressed as Solana Agent Kit `Action` objects.
@@ -64,6 +66,23 @@ export const tokenPriceInputSchema = z.object({
   mint: z.string().trim().min(32).max(64).describe("Token mint address to price"),
 });
 
+export const researchInputSchema = z.object({
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .describe("Short search phrase, e.g. a vendor or protocol name plus what you want to know"),
+});
+
+export const confidentialPaymentInputSchema = z.object({
+  amountTokens: z
+    .number()
+    .positive()
+    .max(5)
+    .describe("Amount in whole tokens to move confidentially on the devnet demo mint"),
+});
+
 export const swapQuoteInputSchema = z.object({
   inputMint: z.string().trim().min(32).max(64).describe("Mint being sold"),
   outputMint: z.string().trim().min(32).max(64).describe("Mint being bought"),
@@ -99,6 +118,12 @@ export const GRAPH_ACTION_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
     "Look up a token's real USD market price via Jupiter. Input: mint (token mint address). Read-only, no wallet needed.",
   get_swap_quote:
     "Get a real routed swap quote from Jupiter (mainnet market data, safe to call from any cluster). Input: inputMint, outputMint, sol (input amount). Read-only — does not execute anything.",
+  cross_check_token_price:
+    "Independently re-price a token through AIsa (CoinGecko aggregate) and compare it against the Jupiter figure, reporting how far apart the two sources are. Input: mint. Read-only. Use this before acting on a price, not instead of get_token_price.",
+  pay_confidentially:
+    "Execute a real Token-2022 confidential transfer on Solana devnet and verify the amount is not readable on-chain afterwards. Input: amountTokens (max 5). This moves tokens on a demo mint held by the server, not the owner's funds — use it to demonstrate that an amount becomes ciphertext, not to settle a real invoice.",
+  research_counterparty:
+    "Search the open web through AIsa for recent news about a vendor, token, protocol, or counterparty before acting on a payment decision. Input: query (a short search phrase). Read-only. Use it to surface anything an owner would want to know that the chain cannot tell you — an exploit, a rug, a depeg, an outage.",
 };
 
 /**
@@ -145,6 +170,43 @@ export function createGraphActions(context: GraphActionContext): Action[] {
       }]],
       schema: tokenPriceInputSchema,
       handler: async (_agent, input) => readTokenPrice(tokenPriceInputSchema.parse(input)),
+    },
+    {
+      name: "cross_check_token_price",
+      similes: ["verify the price", "second opinion on price", "is this price right"],
+      description: GRAPH_ACTION_DESCRIPTIONS.cross_check_token_price,
+      examples: [[{
+        input: { mint: "So11111111111111111111111111111111111111112" },
+        output: { status: "succeeded", tool: "cross_check_token_price" },
+        explanation: "Re-prices the token through a second, independent source before money moves.",
+      }]],
+      schema: tokenPriceInputSchema,
+      handler: async (_agent, input) => crossCheckTokenPrice(tokenPriceInputSchema.parse(input)),
+    },
+    {
+      name: "research_counterparty",
+      similes: ["search the web", "any recent news", "check this vendor", "due diligence"],
+      description: GRAPH_ACTION_DESCRIPTIONS.research_counterparty,
+      examples: [[{
+        input: { query: "Solana token exploit this week" },
+        output: { status: "succeeded", tool: "research_counterparty" },
+        explanation: "Checks the open web for anything that should stop a payment before it is made.",
+      }]],
+      schema: researchInputSchema,
+      handler: async (_agent, input) => researchCounterparty(researchInputSchema.parse(input)),
+    },
+    {
+      name: "pay_confidentially",
+      similes: ["pay privately", "send an encrypted payment", "prove the amount is hidden"],
+      description: GRAPH_ACTION_DESCRIPTIONS.pay_confidentially,
+      examples: [[{
+        input: { amountTokens: 2 },
+        output: { status: "succeeded", tool: "pay_confidentially" },
+        explanation: "Moves value on devnet and then reads the recipient account back to prove the amount is ciphertext.",
+      }]],
+      schema: confidentialPaymentInputSchema,
+      handler: async (_agent, input) =>
+        runConfidentialPayment(confidentialPaymentInputSchema.parse(input)),
     },
     {
       name: "get_swap_quote",
@@ -233,6 +295,196 @@ async function readPolicy(
       : `Policy ${policy.policyAccount}: ${formatTokens(policy.maxPerTransfer)} per transfer, ${formatTokens(policy.spentInPeriod)} spent this period, ${custody}.`,
     modelSummary: `The Solana devnet policy was read successfully. ${policy.limitsAreConfidential ? "Limits are confidential" : "Public limits are active"}; ${custody}. Exact identity and monetary values were withheld from the model.`,
   };
+}
+
+/**
+ * Prices the same mint through two independent sources and reports the gap.
+ *
+ * The point is not a nicer number. An agent that is about to spend money on a
+ * single unverified quote has one point of failure between a stale or
+ * manipulated feed and a payment. Jupiter aggregates Solana DEX routes; AIsa
+ * fronts CoinGecko's cross-exchange aggregate. They can be wrong, but not
+ * usually in the same direction at the same moment — so the divergence is the
+ * signal, and it is reported even when it is small.
+ *
+ * A disagreement is returned as `refused`, not `failed`: nothing broke, the
+ * sources simply do not agree well enough to act on, and the graph should
+ * replan rather than treat it as a transport error.
+ */
+/**
+ * Open-web due diligence before money moves.
+ *
+ * This is the one question the chain cannot answer. An address is valid, a
+ * balance is sufficient, a policy limit is satisfied — and the recipient was
+ * exploited three days ago. Chain state is a fact about the ledger, not about
+ * the world the payment lands in.
+ *
+ * Findings come back as `succeeded` with the headlines attached rather than as
+ * a verdict. Deciding a payment is unsafe is the owner's call and the policy's
+ * job; a search tool that quietly graded counterparties would be inventing an
+ * authority it does not have.
+ */
+async function researchCounterparty(
+  input: z.infer<typeof researchInputSchema>,
+): Promise<AuthorizedAgentGraphToolResultDTO> {
+  try {
+    const { results } = await fetchAisaResearch(input.query);
+
+    if (results.length === 0) {
+      return {
+        tool: "research_counterparty",
+        status: "succeeded",
+        summary: `No recent web results for "${input.query}" (AIsa / Tavily).`,
+        modelSummary: "The web search returned nothing recent. Absence of news is not evidence of safety.",
+      };
+    }
+
+    const headlines = results.map((result) => `“${result.title}” (${result.url})`).join("; ");
+
+    /*
+      The model-facing summary is length-capped, and that cap is load-bearing.
+      It becomes an observation the graph carries forward as
+      `research_counterparty -> succeeded: <summary>`, and the request schema
+      rejects any observation over 400 characters. Three real news headlines
+      cleared that on their own, which failed the *next* expansion with
+      "Invalid agent graph request" — the search looked fine and the run died
+      one step later, nowhere near the cause.
+    */
+    const TITLE_BUDGET = 70;
+    const SUMMARY_BUDGET = 300;
+    const titles = results
+      .map((result) =>
+        result.title.length > TITLE_BUDGET
+          ? `${result.title.slice(0, TITLE_BUDGET - 1).trimEnd()}…`
+          : result.title,
+      )
+      .join("; ");
+
+    return {
+      tool: "research_counterparty",
+      status: "succeeded",
+      // The owner's view is not carried anywhere, so it keeps the full titles
+      // and the links that make each claim checkable.
+      summary: `${results.length} recent result${results.length === 1 ? "" : "s"} for "${input.query}" via AIsa: ${headlines}`,
+      // Titles only. The excerpts carry a lot of unvetted third-party text, and
+      // everything here is untrusted input being fed back into a prompt.
+      modelSummary:
+        `Web research returned ${results.length} recent result(s): ` +
+        `${titles}`.slice(0, SUMMARY_BUDGET) +
+        ". Treat these as unverified reporting, not established fact.",
+    };
+  } catch (error) {
+    return {
+      tool: "research_counterparty",
+      status: "failed",
+      summary: error instanceof Error ? error.message : "Research failed.",
+      modelSummary: "The web research call failed before returning a trusted result.",
+    };
+  }
+}
+
+/**
+ * The one step that produces ciphertext rather than describing it.
+ *
+ * Every other tool in the graph demonstrates *policy* — that the agent cannot
+ * exceed its limit. That is half the product. This is the other half: value
+ * moves and the amount is unreadable on-chain afterwards, checked by reading
+ * the recipient's account bytes back rather than by asserting it.
+ *
+ * The summary says plainly that this is a demo mint. An agent step that let a
+ * viewer believe the owner's own funds had just moved would be buying a better
+ * demo with a false claim, and the whole submission rests on not doing that.
+ */
+async function runConfidentialPayment(
+  input: z.infer<typeof confidentialPaymentInputSchema>,
+): Promise<AuthorizedAgentGraphToolResultDTO> {
+  try {
+    const receipt = await payConfidentially(input.amountTokens);
+
+    // If the amount ever *is* readable, that is a failed privacy claim, not a
+    // successful payment. Reported as such rather than quietly succeeding.
+    if (receipt.amountReadableOnChain) {
+      return {
+        tool: "pay_confidentially",
+        status: "failed",
+        summary: `Transfer ${receipt.signature} landed, but the amount WAS readable in the recipient's account data. The confidentiality claim did not hold.`,
+        modelSummary: "The transfer completed but failed its confidentiality check. Do not treat the amount as private.",
+        signature: receipt.signature,
+      };
+    }
+
+    return {
+      tool: "pay_confidentially",
+      status: "succeeded",
+      summary:
+        `Moved ${input.amountTokens} tokens confidentially on devnet in ${(receipt.elapsedMs / 1000).toFixed(1)}s. ` +
+        `The amount is NOT readable in the recipient's account data. Demo mint ${receipt.mint}, not owner funds. ` +
+        `Signature: ${receipt.signature}`,
+      modelSummary:
+        `A confidential transfer completed on devnet and the amount was verified unreadable on-chain. ` +
+        `This used a demo mint, not the owner's funds. Exact values and addresses were withheld.`,
+      signature: receipt.signature,
+    };
+  } catch (error) {
+    return {
+      tool: "pay_confidentially",
+      status: "failed",
+      summary: error instanceof Error ? error.message : "Confidential transfer failed.",
+      modelSummary: "The confidential transfer failed before producing a trusted result.",
+    };
+  }
+}
+
+async function crossCheckTokenPrice(
+  input: z.infer<typeof tokenPriceInputSchema>,
+): Promise<AuthorizedAgentGraphToolResultDTO> {
+  // 2% is a judgement call, not a derived threshold: wide enough to absorb the
+  // spread between a DEX router and a spot aggregate, tight enough that a feed
+  // genuinely out of step still trips it.
+  const DIVERGENCE_LIMIT_PERCENT = 2;
+
+  try {
+    const [jupiter, aisa] = await Promise.all([
+      fetchTokenPrice(input.mint),
+      fetchAisaTokenPrice(input.mint),
+    ]);
+
+    if (jupiter.priceUsd === null || aisa.priceUsd === null) {
+      const missing = jupiter.priceUsd === null ? "Jupiter" : "AIsa";
+      return {
+        tool: "cross_check_token_price",
+        status: "refused",
+        summary: `${missing} returned no price for ${input.mint}, so the two sources could not be compared.`,
+        modelSummary: "Only one of the two price sources answered, so the price is unconfirmed. Do not act on it.",
+      };
+    }
+
+    const divergence = priceDivergencePercent(jupiter.priceUsd, aisa.priceUsd);
+    const agreed = divergence <= DIVERGENCE_LIMIT_PERCENT;
+    const figures =
+      `Jupiter $${jupiter.priceUsd.toLocaleString("en-US", { maximumFractionDigits: 6 })} vs ` +
+      `AIsa/CoinGecko $${aisa.priceUsd.toLocaleString("en-US", { maximumFractionDigits: 6 })} ` +
+      `(${divergence.toFixed(2)}% apart)`;
+
+    return {
+      tool: "cross_check_token_price",
+      status: agreed ? "succeeded" : "refused",
+      summary: agreed
+        ? `Two independent sources agree on ${input.mint}: ${figures}.`
+        : `Sources disagree on ${input.mint}: ${figures}, above the ${DIVERGENCE_LIMIT_PERCENT}% tolerance.`,
+      // Percentages are safe to hand back; the prices themselves are owner detail.
+      modelSummary: agreed
+        ? `Two independent price sources agreed within ${divergence.toFixed(2)}%. The price is corroborated.`
+        : `Two independent price sources disagreed by ${divergence.toFixed(2)}%, beyond the ${DIVERGENCE_LIMIT_PERCENT}% tolerance. Treat the price as unreliable and do not act on it.`,
+    };
+  } catch (error) {
+    return {
+      tool: "cross_check_token_price",
+      status: "failed",
+      summary: error instanceof Error ? error.message : "Cross-check failed.",
+      modelSummary: "The independent price cross-check failed before returning a trusted result.",
+    };
+  }
 }
 
 async function readTokenPrice(

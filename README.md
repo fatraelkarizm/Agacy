@@ -99,6 +99,43 @@ between an AI agent's decisions and the owner's funds**.
 | **Web3 protocols and agent platforms** | Keeper costs, data feeds, compute, settlement, and agent-to-agent services | An always-on agent needs machine-speed payments, but the protocol still needs cryptographic limits and an owner-readable audit trail. |
 | **Individual power users** | Subscriptions, trading tools, data purchases, and personal automation | They want delegation without publishing a permanent financial profile or giving a model unlimited authority. |
 
+### Each of those users, actually run
+
+The four rows above were a claim about who this is for. Below is each one driven
+through the Agent Graph as a real goal on Solana devnet — the agent chose its own
+tools, and every payment is a Token-2022 confidential transfer whose amount was
+then read back from the recipient's account bytes to confirm it is unreadable.
+
+| Persona | Goal given to the agent | Tools the agent chose | Confidential transfer | Wall clock |
+|---|---|---|---|---|
+| **DAO treasury operator** | Contributor payout is due — check the wallet, search for any Solana security incident that should stop it, then pay 2 tokens confidentially | `get_wallet_overview`, `research_counterparty`, `cross_check_token_price`, `pay_confidentially` | [`4K3Pwvq1…`](https://explorer.solana.com/tx/4K3PwvQ1qusP1VWyVLxH8tGHUGoH6q993RGNW7Z8QFhcm6x8LLwSzjDWZ9vn65PB2mVWYQQU8VrYWXMxVzVvptZs?cluster=devnet) · 21.9s · **amount not readable** | 50s |
+| **Startup / SME procurement** | SaaS vendor invoice — price SOL, cross-check it independently, then pay 1 token confidentially so supplier pricing stays private | `get_token_price`, `cross_check_token_price`, `research_counterparty`, `pay_confidentially` | [`4u5vP4kx…`](https://explorer.solana.com/tx/4u5vP4kxPmCSZmfAoHFX2TYpKiF61UZM1V9sMv3cCSGf7GiHy4E8UY9HLhFHR8EAxHZvUfhG8nTZkAhu8vpdzsWb?cluster=devnet) · 21.9s · **amount not readable** | 62s |
+| **Web3 protocol / agent platform** | Settling a keeper's fee — cross-check the price against an independent source, check the wallet, then settle 1 token confidentially | `cross_check_token_price`, `get_wallet_overview`, `pay_confidentially` | [`4Vzr2fqV…`](https://explorer.solana.com/tx/4Vzr2fqVQGwrjQsCNNMcEZzvg2nnsMuJE9DRsVuE4VRRpTY2qfnwxQq4EpxpaySHyFHFGZtHf2UNLCAWwzVVSvEu?cluster=devnet) · 22.0s · **amount not readable** | 62s |
+| **Individual power user** | Renew a monthly data subscription — check for any recent incident, price SOL, then pay 1 token confidentially | `research_counterparty`, `get_token_price`, `pay_confidentially` | [`3fB2TQ9v…`](https://explorer.solana.com/tx/3fB2TQ9veNdwuVFj71ywUPg3hv9hg79UdKcby8hd5dRB6KcmVGY1DZdSs5zdKZBV6nWPTGy8WmNDUxh1SD58RwnL?cluster=devnet) · 22.1s · **amount not readable** | 52s |
+
+Screenshots: [DAO](public/graph/persona-1-dao-treasury.png) · [SME](public/graph/persona-2-sme-procurement.png) · [Protocol](public/graph/persona-3-protocol-keeper.png) · [Individual](public/graph/persona-4-individual.png). First-expansion planning for all four is captured in `server/data/persona-runs.json` (`npm run personas`).
+
+#### What a run costs and how long it takes
+
+| Step | Latency | Cost |
+|---|---|---|
+| Model expansion (one node) | 1.5–10s, 7–8 per goal | Token cost not yet measured |
+| AIsa data call (`cross_check_token_price`, `research_counterparty`) | 0.5–2.4s | **$0.0080 per call**, billed by AIsa |
+| Confidential transfer (`pay_confidentially`) | **21.9–22.1s**, 6 Solana transactions | 45,000 lamports (~$0.003) |
+| Ordinary SPL transfer, for comparison | 0.9s, 1 transaction | 5,000 lamports |
+| **Whole goal, end to end** | **50–62s** | ~$0.02 per run at 1–2 AIsa calls |
+
+Two honest notes. **Latency, not cost, is the constraint** — confidentiality adds
+about $0.003 to a payment but takes 22 seconds instead of one, because three ZK
+proofs must verify into context accounts before the transfer instruction runs.
+That rules out latency-sensitive uses and does not affect the invoice,
+subscription and treasury workflows above. And **the model's token cost is not
+measured yet**; only the call count is. Everything else in this table was read
+from a meter or a clock, not estimated.
+
+`pay_confidentially` moves tokens on a devnet demo mint held by the server, not
+owner funds, and the agent's own summary says so in every run.
+
 ### Market size
 
 | | Size today | What it means for Agacy |

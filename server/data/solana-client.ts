@@ -35,8 +35,27 @@ import {
  * rate-limits hard, and a confidential transfer needs several transactions in
  * quick succession (three proof verifications, the transfer, then cleanup).
  */
-export const DEVNET_RPC_URL = process.env["AGACY_RPC_URL"] ?? "https://api.devnet.solana.com";
-export const DEVNET_WS_URL = process.env["AGACY_WS_URL"] ?? "wss://api.devnet.solana.com";
+/**
+ * A Helius dashboard hands you an API key, not an endpoint, so pasting the key
+ * straight into AGACY_RPC_URL is the natural mistake. It was already handled in
+ * tests/setup-env.ts — but only scripts import that file, so the Next server
+ * read the bare key and every RPC call died on "Failed to parse URL from
+ * <uuid>". Normalising here means both runtimes agree.
+ */
+const HELIUS_KEY = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function resolveEndpoint(configured: string | undefined, scheme: "https" | "wss"): string | null {
+  if (!configured) return null;
+  return HELIUS_KEY.test(configured)
+    ? `${scheme}://devnet.helius-rpc.com/?api-key=${configured}`
+    : configured;
+}
+
+export const DEVNET_RPC_URL =
+  resolveEndpoint(process.env["AGACY_RPC_URL"], "https") ?? "https://api.devnet.solana.com";
+export const DEVNET_WS_URL =
+  resolveEndpoint(process.env["AGACY_WS_URL"] ?? process.env["AGACY_RPC_URL"], "wss") ??
+  "wss://api.devnet.solana.com";
 
 export interface SolanaClient {
   readonly rpc: Rpc<SolanaRpcApi>;

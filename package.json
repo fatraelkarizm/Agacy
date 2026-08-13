@@ -10,6 +10,8 @@
     "build": "next build",
     "start": "next start",
     "capture-proof": "tsx scripts/capture-devnet-proof.ts",
+    "preflight": "tsx scripts/preflight-devnet.ts",
+    "measure-cost": "tsx scripts/measure-cost-devnet.ts",
     "verify-delegate-binding": "tsx scripts/verify-delegate-binding-devnet.ts",
     "verify-confidential-delegate": "tsx scripts/verify-confidential-delegate-devnet.ts",
     "verify-custody": "tsx scripts/verify-custody-devnet.ts",
@@ -18,7 +20,8 @@
     "verify-attacks": "tsx scripts/verify-attacks-devnet.ts",
     "verify-custody-ui": "tsx scripts/verify-custody-ui-devnet.ts",
     "agent": "tsx scripts/run-autonomous-agent.ts",
-    "agent:mainnet": "cross-env AGACY_CLUSTER=mainnet tsx scripts/run-autonomous-agent.ts"
+    "agent:mainnet": "cross-env AGACY_CLUSTER=mainnet tsx scripts/run-autonomous-agent.ts",
+    "personas": "tsx scripts/run-persona-goals.ts"
   },
   "repository": {
     "type": "git",
@@ -43,6 +46,7 @@
     "@solana/sysvars": "^7.0.0",
     "@solana/web3.js": "^1.98.4",
     "@solana/zk-sdk": "^0.4.2",
+    "@xyflow/react": "^12.11.3",
     "ai": "^4.3.19",
     "next": "^15.5.22",
     "react": "^19.2.8",

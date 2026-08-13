@@ -1,0 +1,84 @@
+{
+  "capturedAt": "2026-08-13T08:20:14.455Z",
+  "note": "First-expansion planning only. Tool execution happens in the browser because the handlers call this app's API routes.",
+  "model": "gpt-4o-mini",
+  "availableTools": [
+    "get_wallet_overview",
+    "get_token_price",
+    "cross_check_token_price",
+    "research_counterparty",
+    "pay_confidentially",
+    "get_swap_quote"
+  ],
+  "personas": [
+    {
+      "id": "dao-treasury",
+      "persona": "DAO treasury operator",
+      "goal": "I run a DAO treasury and a contributor payout is due. Check my wallet overview, search the web for any recent Solana security incident that should stop the payment, then pay 2 tokens confidentially so our runway stays private.",
+      "firstExpansionMs": 2585,
+      "children": 4,
+      "toolsChosen": [
+        "get_wallet_overview",
+        "research_counterparty"
+      ],
+      "labels": [
+        "Check wallet overview",
+        "Search for Solana security incidents",
+        "Prepare to pay tokens confidentially",
+        "Check for token price"
+      ]
+    },
+    {
+      "id": "sme-procurement",
+      "persona": "Startup / SME procurement",
+      "goal": "Our SaaS vendor invoice is due. Price SOL at mint So11111111111111111111111111111111111111112 and cross-check that price against an independent source, then pay 1 token confidentially so our supplier pricing does not become public.",
+      "firstExpansionMs": 3528,
+      "children": 4,
+      "toolsChosen": [
+        "get_token_price",
+        "cross_check_token_price",
+        "research_counterparty"
+      ],
+      "labels": [
+        "Price SOL via Jupiter",
+        "Cross-check SOL price",
+        "Research vendor news",
+        "Prepare for payment"
+      ]
+    },
+    {
+      "id": "protocol-keeper",
+      "persona": "Web3 protocol / agent platform",
+      "goal": "I am a protocol settling a keeper's fee. Cross-check the SOL price at mint So11111111111111111111111111111111111111112 against an independent source, check my wallet overview, then settle 1 token confidentially.",
+      "firstExpansionMs": 2851,
+      "children": 4,
+      "toolsChosen": [
+        "cross_check_token_price",
+        "get_wallet_overview"
+      ],
+      "labels": [
+        "Cross-check SOL price",
+        "Check wallet overview",
+        "Prepare to settle fee",
+        "Blocked: Missing payment execution"
+      ]
+    },
+    {
+      "id": "individual",
+      "persona": "Individual power user",
+      "goal": "Renew my monthly market data subscription. Search the web for any recent Solana security incident, price SOL at mint So11111111111111111111111111111111111111112, then pay 1 token confidentially so my spending profile stays private.",
+      "firstExpansionMs": 5074,
+      "children": 4,
+      "toolsChosen": [
+        "get_token_price",
+        "pay_confidentially"
+      ],
+      "labels": [
+        "Search for recent Solana security incidents",
+        "Price SOL token",
+        "Pay 1 token confidentially",
+        "Cross-check SOL price"
+      ]
+    }
+  ]
+}
