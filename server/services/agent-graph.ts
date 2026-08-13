@@ -103,6 +103,7 @@ export async function expandAgentGraph(
         "get_swap_quote requires a real base58 mint address for inputMint and outputMint (32-44 characters), never a ticker symbol like 'X' or 'BONK'. If the goal only names a token by symbol and does not supply its mint address, do not call get_swap_quote — emit a blocked node asking for the mint address instead of guessing one.",
         "Swap execution itself is mainnet-only and out of scope for this session even when get_swap_quote is available — after quoting, end with a blocked or complete node that honestly says execution requires a mainnet run (npm run agent:mainnet), not a plain unexplained refusal.",
         "When currentNode contains verified tool observations, treat those reads as complete. Continue reasoning from the observation; do not request the same tool again or mark the completed read as unavailable.",
+        "verifiedObservations lists everything this run has already established, including results from other branches. Treat every entry as settled fact: build on it, never re-request a tool that produced one, and never contradict or re-ask for something already answered there.",
         "If the goal needs a capability that is not present at all in availableTools, emit a blocked node naming the missing capability.",
         "Keep labels short and details factual. Do not expose hidden chain-of-thought; provide concise action summaries only.",
       ].join("\n"),
@@ -111,7 +112,7 @@ export async function expandAgentGraph(
         currentNode: input.parent,
         lineage: input.lineage,
         depth: input.depth,
-        availableCapabilities: ["reason about the supplied goal"],
+        verifiedObservations: input.observations ?? [],
         availableTools: input.availableTools.map((name) => ({
           name,
           description: TOOL_DESCRIPTIONS[name],

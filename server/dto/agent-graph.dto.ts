@@ -64,6 +64,16 @@ export interface AgentGraphExpansionRequestDTO {
   readonly depth: number;
   readonly lineage: readonly string[];
   readonly availableTools: readonly AgentGraphToolName[];
+  /**
+   * Redacted results of every tool this run has already executed, in order.
+   *
+   * `lineage` only carries ancestor *labels*, so without this a branch could
+   * not see what a sibling branch already established, and facts more than one
+   * node back were lost entirely — the model would re-derive or contradict
+   * things it had already verified. These are `modelSummary` strings, never the
+   * owner-only `summary`, so accumulating them cannot widen what the model sees.
+   */
+  readonly observations?: readonly string[];
 }
 
 export interface AgentGraphChildDTO {

@@ -114,6 +114,9 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
     const queue: QueueItem[] = [{ node: root, lineage: [root.label] }];
     const executedToolCalls = new Set<string>();
     const completedReadTools = new Set<AgentGraphToolName>();
+    // What this run has actually established, carried across every branch.
+    // Only `modelSummary` goes in here — never the owner-only `summary`.
+    const verifiedObservations: string[] = [];
     let requests = 0;
     let created = 0;
 
@@ -143,6 +146,9 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
             },
             depth: item.node.depth,
             lineage: item.lineage,
+            // Most recent first-hand facts win if the run is long enough to
+            // exceed the server's cap, since later reads supersede earlier ones.
+            observations: verifiedObservations.slice(-12),
             availableTools: availableTools.filter((tool) =>
               tool === "authorize_policy_spend" || !completedReadTools.has(tool)),
           }),
@@ -180,6 +186,13 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
               completedReadTools.add(child.toolCall.name);
             }
             if (runIdRef.current !== runId) return;
+
+            // Recorded whatever the outcome: a refusal ("that spend was over
+            // the limit") is as much a verified fact as a successful read, and
+            // is exactly what stops the model retrying the same dead end.
+            verifiedObservations.push(
+              `${child.toolCall.name} -> ${toolResult.status}: ${toolResult.modelSummary}`,
+            );
 
             const resultNode = makeToolResultNode(child, toolResult);
             created += 1;

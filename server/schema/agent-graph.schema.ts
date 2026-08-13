@@ -57,6 +57,9 @@ export const agentGraphExpansionRequestSchema = z.object({
   depth: z.number().int().min(0).max(4),
   lineage: z.array(z.string().trim().min(1).max(80)).max(5),
   availableTools: z.array(agentGraphToolNameSchema).max(5),
+  // Bounded so a long run cannot grow the prompt without limit; the client
+  // sends the most recent entries and drops older ones.
+  observations: z.array(z.string().trim().min(1).max(400)).max(12).optional(),
 });
 
 export const agentGraphExpansionSchema = z.object({
