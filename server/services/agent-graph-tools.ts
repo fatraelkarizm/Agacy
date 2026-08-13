@@ -8,8 +8,10 @@ import type {
 import { formatTokens } from "./demo-scenario";
 import { runAgentOnChain } from "./agent-run";
 import { evaluateSpendPolicy, fetchOnChainPolicyStatus } from "./spend-policy";
+import { fetchTokenPrice, fetchSwapQuote } from "../../agent/effects/jupiter";
 
 const TOKEN_SCALE = 1_000_000;
+const LAMPORTS_PER_SOL = 1_000_000_000;
 
 export interface ExecuteAgentGraphToolParams {
   readonly call: AgentGraphToolCallDTO;
@@ -28,7 +30,12 @@ export async function executeAgentGraphTool(
   try {
     if (params.call.name === "get_wallet_overview") return walletOverview(params);
     if (params.call.name === "check_on_chain_policy") return readPolicy(params);
-    return authorizeSpend(params);
+    if (params.call.name === "get_token_price") return readTokenPrice(params.call.input);
+    if (params.call.name === "get_swap_quote") return readSwapQuote(params.call.input);
+    if (params.call.name !== "authorize_policy_spend") {
+      return blocked(params.call.name, "Unrecognised tool call.");
+    }
+    return authorizeSpend({ ...params, call: params.call });
   } catch (error) {
     return {
       tool: params.call.name,
@@ -72,7 +79,9 @@ async function readPolicy(
 }
 
 async function authorizeSpend(
-  params: ExecuteAgentGraphToolParams,
+  params: Omit<ExecuteAgentGraphToolParams, "call"> & {
+    readonly call: Extract<AgentGraphToolCallDTO, { name: "authorize_policy_spend" }>;
+  },
 ): Promise<AuthorizedAgentGraphToolResultDTO> {
   if (!params.policy || !params.policyAccount) {
     return blocked("authorize_policy_spend", "Create an agent policy before requesting authorization.");
@@ -154,6 +163,61 @@ async function authorizeSpend(
     summary: "The policy program returned no outcome.",
     modelSummary: "The authorization tool ended without a trusted result.",
   };
+}
+
+async function readTokenPrice(
+  input: { mint: string },
+): Promise<AuthorizedAgentGraphToolResultDTO> {
+  try {
+    const { priceUsd } = await fetchTokenPrice(input.mint);
+    return {
+      tool: "get_token_price",
+      status: "succeeded",
+      summary: priceUsd === null
+        ? `No live Jupiter price found for ${input.mint}.`
+        : `${input.mint}: $${priceUsd.toLocaleString("en-US", { maximumFractionDigits: 6 })} USD (Jupiter, mainnet market data).`,
+      modelSummary: priceUsd === null
+        ? "No price was found for that mint."
+        : `Price found: $${priceUsd}. This is market data only — no funds moved.`,
+    };
+  } catch (error) {
+    return {
+      tool: "get_token_price",
+      status: "failed",
+      summary: error instanceof Error ? error.message : "Price lookup failed.",
+      modelSummary: "The price lookup failed before returning a trusted result.",
+    };
+  }
+}
+
+async function readSwapQuote(
+  input: { inputMint: string; outputMint: string; sol: number },
+): Promise<AuthorizedAgentGraphToolResultDTO> {
+  try {
+    const quote = await fetchSwapQuote({
+      inputMint: input.inputMint,
+      outputMint: input.outputMint,
+      amountLamports: BigInt(Math.round(input.sol * LAMPORTS_PER_SOL)),
+    });
+    return {
+      tool: "get_swap_quote",
+      status: "succeeded",
+      summary:
+        `Quote: ${input.sol} SOL in -> ${quote.outAmount} base units of ${input.outputMint} out ` +
+        `(price impact ${quote.priceImpactPct ?? "unknown"}%). Jupiter mainnet route — nothing executed. ` +
+        `Executing a real swap needs a mainnet run (npm run agent:mainnet); it is not available in this session.`,
+      modelSummary:
+        `A swap quote was found: ${input.sol} SOL for approximately ${quote.outAmount} base units of the ` +
+        "output token. This is a quote only — execution is mainnet-only and out of scope here.",
+    };
+  } catch (error) {
+    return {
+      tool: "get_swap_quote",
+      status: "failed",
+      summary: error instanceof Error ? error.message : "Swap quote failed.",
+      modelSummary: "The swap quote failed before returning a trusted result.",
+    };
+  }
 }
 
 function mentionsAmount(goal: string, amount: number): boolean {

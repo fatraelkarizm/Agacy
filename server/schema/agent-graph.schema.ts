@@ -14,6 +14,8 @@ export const agentGraphToolNameSchema = z.enum([
   "get_wallet_overview",
   "check_on_chain_policy",
   "authorize_policy_spend",
+  "get_token_price",
+  "get_swap_quote",
 ]);
 
 export const agentGraphToolCallSchema = z.discriminatedUnion("name", [
@@ -29,6 +31,20 @@ export const agentGraphToolCallSchema = z.discriminatedUnion("name", [
       reasoning: z.string().trim().min(1).max(220),
     }),
   }),
+  z.object({
+    name: z.literal("get_token_price"),
+    input: z.object({
+      mint: z.string().trim().min(32).max(64),
+    }),
+  }),
+  z.object({
+    name: z.literal("get_swap_quote"),
+    input: z.object({
+      inputMint: z.string().trim().min(32).max(64),
+      outputMint: z.string().trim().min(32).max(64),
+      sol: z.number().positive().max(1_000_000),
+    }),
+  }),
 ]);
 
 export const agentGraphExpansionRequestSchema = z.object({
@@ -40,7 +56,7 @@ export const agentGraphExpansionRequestSchema = z.object({
   }),
   depth: z.number().int().min(0).max(4),
   lineage: z.array(z.string().trim().min(1).max(80)).max(5),
-  availableTools: z.array(agentGraphToolNameSchema).max(3),
+  availableTools: z.array(agentGraphToolNameSchema).max(5),
 });
 
 export const agentGraphExpansionSchema = z.object({
@@ -65,6 +81,10 @@ export const agentGraphModelExpansionSchema = z.object({
       amountTokens: z.number().optional(),
       recipient: z.string().optional(),
       reasoning: z.string().optional(),
+      mint: z.string().optional(),
+      inputMint: z.string().optional(),
+      outputMint: z.string().optional(),
+      sol: z.number().optional(),
     }).optional(),
   })).min(1).max(4),
 });

@@ -476,7 +476,11 @@ export default function DashboardPage() {
   }
 
   if (dashboardSection === "graph") {
-    const availableTools: AgentGraphToolName[] = ["get_wallet_overview"];
+    const availableTools: AgentGraphToolName[] = [
+      "get_wallet_overview",
+      "get_token_price",
+      "get_swap_quote",
+    ];
     if (provisionedPolicy) availableTools.push("check_on_chain_policy");
     if (policy && provisionedPolicy && agentSignerRef.current) {
       availableTools.push("authorize_policy_spend");

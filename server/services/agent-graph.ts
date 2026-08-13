@@ -29,6 +29,10 @@ const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
     "Read the provisioned policy account from Solana devnet. Input must be {}. Read-only.",
   authorize_policy_spend:
     "Ask the deployed policy program to authorize a spend on devnet. Input: amountTokens, recipient, reasoning. This proves policy authorization only; it does not transfer tokens.",
+  get_token_price:
+    "Look up a token's real USD market price via Jupiter. Input: mint (token mint address). Read-only, no wallet needed.",
+  get_swap_quote:
+    "Get a real routed swap quote from Jupiter (mainnet market data, safe to call from any cluster). Input: inputMint, outputMint, sol (input amount). Read-only — does not execute anything.",
 };
 
 export async function expandAgentGraph(
@@ -61,8 +65,11 @@ export async function expandAgentGraph(
         "When a listed tool is needed, emit kind=tool with its exact toolName and toolInput, then set expand=false. The runtime will validate and execute it before adding a factual result node.",
         "Never invent a toolName. authorize_policy_spend is not a token transfer and must never be described as payment completion.",
         "Only call authorize_policy_spend when the owner goal explicitly supplies the amount and recipient; never invent either value.",
+        "For goals about buying, pricing, or swapping a token, use get_token_price and get_swap_quote when they are available — they return real market data and let you make concrete progress instead of blocking immediately. Both are read-only research: they never execute a purchase.",
+        "get_swap_quote requires a real base58 mint address for inputMint and outputMint (32-44 characters), never a ticker symbol like 'X' or 'BONK'. If the goal only names a token by symbol and does not supply its mint address, do not call get_swap_quote — emit a blocked node asking for the mint address instead of guessing one.",
+        "Swap execution itself is mainnet-only and out of scope for this session even when get_swap_quote is available — after quoting, end with a blocked or complete node that honestly says execution requires a mainnet run (npm run agent:mainnet), not a plain unexplained refusal.",
         "When currentNode contains verified tool observations, treat those reads as complete. Continue reasoning from the observation; do not request the same tool again or mark the completed read as unavailable.",
-        "If the goal needs a capability that is not present, emit a blocked node naming the missing capability.",
+        "If the goal needs a capability that is not present at all in availableTools, emit a blocked node naming the missing capability.",
         "Keep labels short and details factual. Do not expose hidden chain-of-thought; provide concise action summaries only.",
       ].join("\n"),
       prompt: JSON.stringify({

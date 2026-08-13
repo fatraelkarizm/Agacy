@@ -10,7 +10,9 @@ export type AgentGraphNodeKind =
 export type AgentGraphToolName =
   | "get_wallet_overview"
   | "check_on_chain_policy"
-  | "authorize_policy_spend";
+  | "authorize_policy_spend"
+  | "get_token_price"
+  | "get_swap_quote";
 
 export type AgentGraphToolCallDTO =
   | {
@@ -23,6 +25,20 @@ export type AgentGraphToolCallDTO =
         readonly amountTokens: number;
         readonly recipient: string;
         readonly reasoning: string;
+      };
+    }
+  | {
+      readonly name: "get_token_price";
+      readonly input: {
+        readonly mint: string;
+      };
+    }
+  | {
+      readonly name: "get_swap_quote";
+      readonly input: {
+        readonly inputMint: string;
+        readonly outputMint: string;
+        readonly sol: number;
       };
     };
 
