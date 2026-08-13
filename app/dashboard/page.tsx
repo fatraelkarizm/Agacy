@@ -60,13 +60,17 @@ import {
 
 const devnetClient = createDevnetClient();
 const DASHBOARD_SECTIONS: readonly DashboardSection[] = [
-  "overview", "agents", "transactions", "policies", "security", "settings",
+  "overview", "agents", "transactions", "security", "settings",
   "onboarding", "graph", "run",
 ];
 
+function isDashboardSection(value: string): value is DashboardSection {
+  return DASHBOARD_SECTIONS.includes(value as DashboardSection);
+}
+
 function sectionFromUrl(): DashboardSection | null {
   const value = new URLSearchParams(window.location.search).get("section");
-  return DASHBOARD_SECTIONS.includes(value as DashboardSection) ? value as DashboardSection : null;
+  return value && isDashboardSection(value) ? value : null;
 }
 
 /**
@@ -146,6 +150,7 @@ export default function DashboardPage() {
   const [hydrated, setHydrated] = useState(false);
 
   const [dashboardSection, setDashboardSection] = useState<DashboardSection>("overview");
+  const [graphAgentSelected, setGraphAgentSelected] = useState(false);
   const [setupDraft, setSetupDraft] = useState<AgentDraftDTO>(DEFAULT_DRAFT);
   const [onboardingStep, setOnboardingStep] = useState<AgentOnboardingStep>("define");
   const [agent, setAgent] = useState<AgentDraftDTO | null>(null);
@@ -202,7 +207,9 @@ export default function DashboardPage() {
 
         const session = loadDashboardSession(wallet.address);
         const requestedSection = sectionFromUrl();
-        const restoredSection = requestedSection ?? session?.dashboardSection ?? "overview";
+        const savedSection = session?.dashboardSection;
+        const restoredSection = requestedSection
+          ?? (savedSection && isDashboardSection(savedSection) ? savedSection : "overview");
         setDashboardSection(restoredSection);
         window.history.replaceState(null, "", `/dashboard?section=${restoredSection}`);
         if (session) {
@@ -233,6 +240,7 @@ export default function DashboardPage() {
   }, []);
 
   const navigateDashboard = useCallback((section: DashboardSection) => {
+    if (section === "graph") setGraphAgentSelected(false);
     setDashboardSection(section);
     window.history.pushState(null, "", `/dashboard?section=${section}`);
   }, []);
@@ -274,7 +282,7 @@ export default function DashboardPage() {
     setupDraft,
   ]);
 
-  // Once a policy account exists on devnet, the Policies view should show
+  // Once a policy account exists on devnet, the agent detail should show
   // what's actually written there rather than only the local draft — this is
   // the "reload from real data" half of provisioning, not just "create it."
   useEffect(() => {
@@ -328,7 +336,7 @@ export default function DashboardPage() {
         setAgent(draft);
         setPolicy(toSpendPolicy(draft));
         reset();
-        navigateDashboard("graph");
+        navigateDashboard("agents");
       } catch (error) {
         setProvisioningError(
           error instanceof Error
@@ -544,16 +552,17 @@ export default function DashboardPage() {
       ownerView={ownerView}
       onNavigate={navigateDashboard}
       onNewAgent={() => navigateDashboard("onboarding")}
+      onSelectGraphAgent={() => setGraphAgentSelected(true)}
       onToggleOwnerView={() => setOwnerView((visible) => !visible)}
       onDisconnect={() => void disconnect()}
       onProof={() => router.push("/proof")}
       onLanding={() => router.push("/")}
     >
-      {dashboardSection === "graph" ? (
+      {dashboardSection === "graph" && graphAgentSelected && agent ? (
         <AgentGraphArena
           availableTools={availableTools}
           onToolCall={runGraphTool}
-          persistenceKey={ownerWallet.address}
+          persistenceKey={`${ownerWallet.address}.${agent.name}`}
           onExit={() => navigateDashboard("overview")}
         />
       ) : dashboardSection === "onboarding" ? (

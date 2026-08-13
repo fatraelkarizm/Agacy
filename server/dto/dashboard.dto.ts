@@ -2,7 +2,6 @@ export type DashboardSection =
   | "overview"
   | "agents"
   | "transactions"
-  | "policies"
   | "security"
   | "settings"
   | "onboarding"

@@ -43,7 +43,6 @@ const NAV_ITEMS = [
   { id: "agents", label: "Agents", icon: Robot },
   { id: "graph", label: "Agent Graph", icon: Graph },
   { id: "transactions", label: "Transactions", icon: Receipt },
-  { id: "policies", label: "Policies", icon: SlidersHorizontal },
   { id: "security", label: "Security", icon: ShieldCheck },
   { id: "settings", label: "Settings", icon: Gear },
 ] as const;
@@ -52,7 +51,6 @@ const SECTION_TITLES: Record<DashboardSection, string> = {
   overview: "Agent Shell Overview",
   agents: "Autonomous Agents",
   transactions: "Transaction Registry",
-  policies: "Spend Policies",
   security: "Privacy & Security",
   settings: "Owner Settings",
   onboarding: "Create private agent",
@@ -75,6 +73,7 @@ interface DashboardProps {
   readonly ownerView: boolean;
   readonly onNavigate: (section: DashboardSection) => void;
   readonly onNewAgent: () => void;
+  readonly onSelectGraphAgent: () => void;
   readonly onToggleOwnerView: () => void;
   readonly onDisconnect: () => void;
   readonly onProof: () => void;
@@ -97,6 +96,7 @@ export function Dashboard({
   ownerView,
   onNavigate,
   onNewAgent,
+  onSelectGraphAgent,
   onToggleOwnerView,
   onDisconnect,
   onProof,
@@ -130,10 +130,6 @@ export function Dashboard({
         </nav>
 
         <div className="dashboard-side-footer">
-          <button className="primary dashboard-new-agent" onClick={onNewAgent}>
-            <Plus aria-hidden="true" size={18} />
-            New Agent
-          </button>
           <a href="/docs">
             <FileText aria-hidden="true" size={18} weight="duotone" />
             Docs
@@ -177,6 +173,7 @@ export function Dashboard({
               ownerView={ownerView}
               onNavigate={onNavigate}
               onNewAgent={onNewAgent}
+              onSelectGraphAgent={onSelectGraphAgent}
               onToggleOwnerView={onToggleOwnerView}
               onDisconnect={onDisconnect}
               onProof={onProof}
@@ -201,22 +198,16 @@ function DashboardSectionContent(props: DashboardSectionContentProps) {
           status={props.operationalStatus}
           currentTask={props.currentTask}
           onNewAgent={props.onNewAgent}
-          onOpen={() => props.onNavigate("graph")}
+          onOpenGraph={() => props.onNavigate("graph")}
+          policy={props.policy}
+          onChainPolicy={props.onChainPolicy}
+          onChainPolicyLoading={props.onChainPolicyLoading}
           expanded
         />
       );
     case "graph":
     case "run":
-      return (
-        <AgentRegistry
-          agent={props.agent}
-          status={props.operationalStatus}
-          currentTask={props.currentTask}
-          onNewAgent={props.onNewAgent}
-          onOpen={() => props.onNavigate("graph")}
-          expanded
-        />
-      );
+      return <AgentGraphSelector agent={props.agent} onNewAgent={props.onNewAgent} onSelect={props.onSelectGraphAgent} />;
     case "transactions":
       return (
         <TransactionWorkspace
@@ -224,15 +215,6 @@ function DashboardSectionContent(props: DashboardSectionContentProps) {
           authorizedTransactions={props.authorizedTransactions}
           ownerView={props.ownerView}
           onToggleOwnerView={props.onToggleOwnerView}
-        />
-      );
-    case "policies":
-      return (
-        <PolicyWorkspace
-          policy={props.policy}
-          onChainPolicy={props.onChainPolicy}
-          onChainPolicyLoading={props.onChainPolicyLoading}
-          onNewAgent={props.onNewAgent}
         />
       );
     case "security":
@@ -270,13 +252,13 @@ function Overview({
           status={operationalStatus}
           currentTask={currentTask}
           onNewAgent={onNewAgent}
-          onOpen={() => onNavigate("graph")}
+          onOpenGraph={() => onNavigate("graph")}
           onViewAll={() => onNavigate("agents")}
         />
         <PolicyShell
           policy={policy}
           onChainPolicy={onChainPolicy}
-          onOpen={() => onNavigate("policies")}
+          onOpen={() => onNavigate("agents")}
         />
       </div>
 
@@ -318,29 +300,41 @@ function AgentRegistry({
   status,
   currentTask,
   onNewAgent,
-  onOpen,
+  onOpenGraph,
   onViewAll,
+  policy,
+  onChainPolicy,
+  onChainPolicyLoading = false,
   expanded,
 }: {
   agent: AgentDraftDTO | null;
   status: AgentOperationalStatus;
   currentTask: string;
   onNewAgent: () => void;
-  onOpen?: () => void;
+  onOpenGraph?: () => void;
   onViewAll?: () => void;
+  policy?: SpendPolicyDTO | null;
+  onChainPolicy?: OnChainPolicyStatusDTO | null;
+  onChainPolicyLoading?: boolean;
   expanded?: boolean;
 }) {
   return (
     <section className={`dashboard-panel dashboard-agent-registry${expanded ? " expanded" : ""}`}>
-      <PanelHeader icon={Robot} title="Autonomous Agents" action={onViewAll ? "View all" : undefined} onAction={onViewAll} />
+      <PanelHeader
+        icon={Robot}
+        title="Autonomous Agents"
+        action={expanded ? <><Plus aria-hidden="true" size={15} />New agent</> : onViewAll ? "View all" : undefined}
+        onAction={expanded ? onNewAgent : onViewAll}
+      />
       {agent ? (
-        <div className="dashboard-table-wrap">
+        <div className="dashboard-agent-content">
+          <div className="dashboard-table-wrap">
           <table className="dashboard-table">
             <thead><tr><th>Agent identifier</th><th>Status</th><th>Current task</th><th>Encrypted balance</th></tr></thead>
             <tbody>
               <tr>
                 <td>
-                  <button className="dashboard-agent-link" onClick={onOpen}>{agent.name}</button>
+                  <strong>{agent.name}</strong>
                   <small>{humanize(agent.purpose)} shell</small>
                 </td>
                 <td><StatusBadge value={status} /></td>
@@ -349,6 +343,30 @@ function AgentRegistry({
               </tr>
             </tbody>
           </table>
+          </div>
+          {expanded && (
+            <details className="dashboard-agent-details">
+              <summary>
+                <span><strong>Agent details &amp; policies</strong><small>Identity, scope, limits, and on-chain enforcement</small></span>
+                <span>View details</span>
+              </summary>
+              <div className="dashboard-agent-detail-body">
+                <dl className="dashboard-agent-identity">
+                  <div><dt>Agent</dt><dd>{agent.name}</dd></div>
+                  <div><dt>Purpose</dt><dd>{humanize(agent.purpose)}</dd></div>
+                  <div><dt>Visibility</dt><dd>{humanize(agent.visibility)}</dd></div>
+                  <div><dt>Period</dt><dd>{agent.periodDays} days</dd></div>
+                </dl>
+                <PolicyWorkspace
+                  policy={policy ?? null}
+                  onChainPolicy={onChainPolicy ?? null}
+                  onChainPolicyLoading={onChainPolicyLoading}
+                  onNewAgent={onNewAgent}
+                />
+                <button className="primary dashboard-agent-graph-cta" onClick={onOpenGraph}>Use in Agent Graph</button>
+              </div>
+            </details>
+          )}
         </div>
       ) : (
         <div className="dashboard-empty-state">
@@ -358,6 +376,37 @@ function AgentRegistry({
         </div>
       )}
     </section>
+  );
+}
+
+function AgentGraphSelector({
+  agent,
+  onNewAgent,
+  onSelect,
+}: {
+  agent: AgentDraftDTO | null;
+  onNewAgent: () => void;
+  onSelect: () => void;
+}) {
+  return (
+    <div className="dashboard-workspace dashboard-agent-selector">
+      <div className="dashboard-workspace-intro">
+        <div><h2>Choose an agent for this run.</h2><p>The graph inherits that agent&apos;s purpose, privacy mode, and spending policy.</p></div>
+      </div>
+      {agent ? (
+        <button className="dashboard-agent-choice" onClick={onSelect}>
+          <span className="dashboard-agent-choice-icon"><Robot aria-hidden="true" size={25} weight="duotone" /></span>
+          <span><strong>{agent.name}</strong><small>{humanize(agent.purpose)} · {humanize(agent.visibility)}</small></span>
+          <span>Use agent</span>
+        </button>
+      ) : (
+        <div className="dashboard-empty-state standalone">
+          <Robot aria-hidden="true" size={36} weight="duotone" />
+          <div><strong>Create an agent first</strong><p>An execution graph needs an identity and policy boundary before it can run.</p></div>
+          <button className="primary" onClick={onNewAgent}><Plus aria-hidden="true" size={17} />New agent</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -655,7 +704,7 @@ function PanelHeader({
 }: {
   icon: typeof Robot;
   title: string;
-  action?: string;
+  action?: ReactNode;
   onAction?: () => void;
 }) {
   return (

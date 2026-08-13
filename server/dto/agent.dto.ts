@@ -66,7 +66,7 @@ export interface AgentExecutionDTO {
 }
 
 /**
- * What the Policies dashboard view is allowed to render about a live
+ * What the agent policy detail is allowed to render about a live
  * on-chain policy account. Distinct from `SpendPolicyDTO` (the owner's local
  * draft) on purpose — this DTO only exists once a real account has been
  * fetched from devnet, so its presence in the UI is itself the signal that
