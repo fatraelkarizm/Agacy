@@ -1,17 +1,21 @@
-import { address, type TransactionSigner } from "@solana/kit";
+import type { TransactionSigner } from "@solana/kit";
 import type { SolanaClient } from "../data/solana-client";
 import type { SpendPolicyDTO } from "../dto/agent.dto";
 import type {
   AgentGraphToolCallDTO,
   AuthorizedAgentGraphToolResultDTO,
 } from "../dto/agent-graph.dto";
-import { formatTokens } from "./demo-scenario";
-import { runAgentOnChain } from "./agent-run";
-import { evaluateSpendPolicy, fetchOnChainPolicyStatus } from "./spend-policy";
-import { fetchTokenPrice, fetchSwapQuote } from "../../agent/effects/jupiter";
+import { createGraphActions, type UnusedAgent } from "../../agent/graph-actions";
 
-const TOKEN_SCALE = 1_000_000;
-const LAMPORTS_PER_SOL = 1_000_000_000;
+/**
+ * Executes one tool call from the Agent Graph.
+ *
+ * The tools themselves are Solana Agent Kit `Action` objects defined in
+ * `agent/graph-actions.ts`; this module only resolves a call to an action and
+ * runs it. Keeping dispatch here rather than in the arena component means the
+ * browser never needs Agent Kit's runtime — see that file's header for why the
+ * split exists.
+ */
 
 export interface ExecuteAgentGraphToolParams {
   readonly call: AgentGraphToolCallDTO;
@@ -24,18 +28,38 @@ export interface ExecuteAgentGraphToolParams {
   readonly spentThisPeriod: bigint;
 }
 
+/**
+ * Agent Kit hands every handler the agent instance. These handlers never touch
+ * it (dependencies arrive through `GraphActionContext` instead), so the graph
+ * passes nothing — asserted at the one call site rather than weakening the
+ * shared `Action` type for every other consumer.
+ */
+const NO_AGENT = undefined as unknown as UnusedAgent;
+
 export async function executeAgentGraphTool(
   params: ExecuteAgentGraphToolParams,
 ): Promise<AuthorizedAgentGraphToolResultDTO> {
+  const action = createGraphActions({
+    client: params.client,
+    ownerAddress: params.ownerAddress,
+    policy: params.policy,
+    policyAccount: params.policyAccount,
+    agentSigner: params.agentSigner,
+    spentThisPeriod: params.spentThisPeriod,
+    ownerGoal: params.ownerGoal,
+  }).find((candidate) => candidate.name === params.call.name);
+
+  if (!action) {
+    return {
+      tool: params.call.name,
+      status: "blocked",
+      summary: "Unrecognised tool call.",
+      modelSummary: "The requested tool is unavailable in the current owner session.",
+    };
+  }
+
   try {
-    if (params.call.name === "get_wallet_overview") return walletOverview(params);
-    if (params.call.name === "check_on_chain_policy") return readPolicy(params);
-    if (params.call.name === "get_token_price") return readTokenPrice(params.call.input);
-    if (params.call.name === "get_swap_quote") return readSwapQuote(params.call.input);
-    if (params.call.name !== "authorize_policy_spend") {
-      return blocked(params.call.name, "Unrecognised tool call.");
-    }
-    return authorizeSpend({ ...params, call: params.call });
+    return (await action.handler(NO_AGENT, params.call.input)) as AuthorizedAgentGraphToolResultDTO;
   } catch (error) {
     return {
       tool: params.call.name,
@@ -44,195 +68,4 @@ export async function executeAgentGraphTool(
       modelSummary: "The tool failed before producing a trusted result; private error detail was withheld.",
     };
   }
-}
-
-function walletOverview(params: ExecuteAgentGraphToolParams): AuthorizedAgentGraphToolResultDTO {
-  const policy = params.policy;
-  return {
-    tool: "get_wallet_overview",
-    status: "succeeded",
-    summary: policy
-      ? `Owner ${params.ownerAddress}. Policy: ${formatTokens(policy.maxPerTransfer)} per transfer, ${formatTokens(policy.maxPerPeriod)} per period, ${formatTokens(params.spentThisPeriod)} recorded in this session.`
-      : `Owner ${params.ownerAddress}. No local spend policy is configured yet.`,
-    modelSummary: policy
-      ? "The owner wallet overview was read successfully. A spend policy exists; identity and monetary values were withheld from the model."
-      : "The owner wallet overview was read successfully. No spend policy is configured; identity was withheld from the model.",
-  };
-}
-
-async function readPolicy(
-  params: ExecuteAgentGraphToolParams,
-): Promise<AuthorizedAgentGraphToolResultDTO> {
-  if (!params.policyAccount) return blocked("check_on_chain_policy", "No policy account is provisioned.");
-  const policy = await fetchOnChainPolicyStatus(params.client, params.policyAccount);
-  if (!policy) return blocked("check_on_chain_policy", "The policy account was not found on devnet.");
-
-  const custody = policy.custodiedTokenAccount ? "custody active" : "custody not active";
-  return {
-    tool: "check_on_chain_policy",
-    status: "succeeded",
-    summary: policy.limitsAreConfidential
-      ? `Policy ${policy.policyAccount}: encrypted limits active, ${custody}.`
-      : `Policy ${policy.policyAccount}: ${formatTokens(policy.maxPerTransfer)} per transfer, ${formatTokens(policy.spentInPeriod)} spent this period, ${custody}.`,
-    modelSummary: `The Solana devnet policy was read successfully. ${policy.limitsAreConfidential ? "Limits are confidential" : "Public limits are active"}; ${custody}. Exact identity and monetary values were withheld from the model.`,
-  };
-}
-
-async function authorizeSpend(
-  params: Omit<ExecuteAgentGraphToolParams, "call"> & {
-    readonly call: Extract<AgentGraphToolCallDTO, { name: "authorize_policy_spend" }>;
-  },
-): Promise<AuthorizedAgentGraphToolResultDTO> {
-  if (!params.policy || !params.policyAccount) {
-    return blocked("authorize_policy_spend", "Create an agent policy before requesting authorization.");
-  }
-  const recipientAuthorized = params.ownerGoal.includes(params.call.input.recipient) ||
-    params.policy.allowedRecipients.includes(params.call.input.recipient);
-  if (!recipientAuthorized || !mentionsAmount(params.ownerGoal, params.call.input.amountTokens)) {
-    return blocked(
-      "authorize_policy_spend",
-      "The owner mandate must explicitly identify the amount and must name the recipient unless that recipient is already on the policy allow-list.",
-    );
-  }
-  if (!params.agentSigner) {
-    return blocked(
-      "authorize_policy_spend",
-      "The session signing key is unavailable. Recreate the agent in this tab to restore autonomous signing.",
-    );
-  }
-
-  const amount = BigInt(Math.round(params.call.input.amountTokens * TOKEN_SCALE));
-  const onChainPolicy = await fetchOnChainPolicyStatus(params.client, params.policyAccount);
-  if (!onChainPolicy) return blocked("authorize_policy_spend", "The policy account was not found on devnet.");
-
-  const verdict = evaluateSpendPolicy(
-    {
-      action: "transfer",
-      reasoning: params.call.input.reasoning,
-      proposedAmount: amount,
-      recipient: params.call.input.recipient,
-    },
-    {
-      policy: params.policy,
-      spentThisPeriod: onChainPolicy.spentInPeriod,
-      availableBalance: params.policy.maxPerPeriod,
-    },
-  );
-  if (!verdict.compliant) {
-    return {
-      tool: "authorize_policy_spend",
-      status: "refused",
-      summary: verdict.reason,
-      modelSummary: "The requested spend was refused by the owner's policy. Private values and recipient identity were withheld from the model.",
-    };
-  }
-
-  let result: AuthorizedAgentGraphToolResultDTO | undefined;
-  await runAgentOnChain({
-    client: params.client,
-    policyAccount: address(params.policyAccount),
-    agentSigner: params.agentSigner,
-    goal: "Authorize one owner-command spend against the deployed policy.",
-    tasks: [{
-      label: "Owner-command authorization",
-      reasoning: params.call.input.reasoning,
-      amount,
-      recipient: params.call.input.recipient,
-    }],
-    onStep: ({ outcome }) => {
-      result = outcome.status === "authorized"
-        ? {
-            tool: "authorize_policy_spend",
-            status: "succeeded",
-            summary: `Policy authorization confirmed on Solana devnet. No tokens were transferred. Signature: ${outcome.signature}`,
-            modelSummary: "The deployed Solana policy authorized the requested spend. This was authorization only; no tokens were transferred. Private values, recipient, and signature were withheld from the model.",
-            signature: outcome.signature,
-          }
-        : {
-            tool: "authorize_policy_spend",
-            status: "refused",
-            summary: outcome.reason,
-            modelSummary: "The deployed Solana policy refused the requested spend. Private values and recipient identity were withheld from the model.",
-          };
-    },
-  });
-
-  return result ?? {
-    tool: "authorize_policy_spend",
-    status: "failed",
-    summary: "The policy program returned no outcome.",
-    modelSummary: "The authorization tool ended without a trusted result.",
-  };
-}
-
-async function readTokenPrice(
-  input: { mint: string },
-): Promise<AuthorizedAgentGraphToolResultDTO> {
-  try {
-    const { priceUsd } = await fetchTokenPrice(input.mint);
-    return {
-      tool: "get_token_price",
-      status: "succeeded",
-      summary: priceUsd === null
-        ? `No live Jupiter price found for ${input.mint}.`
-        : `${input.mint}: $${priceUsd.toLocaleString("en-US", { maximumFractionDigits: 6 })} USD (Jupiter, mainnet market data).`,
-      modelSummary: priceUsd === null
-        ? "No price was found for that mint."
-        : `Price found: $${priceUsd}. This is market data only — no funds moved.`,
-    };
-  } catch (error) {
-    return {
-      tool: "get_token_price",
-      status: "failed",
-      summary: error instanceof Error ? error.message : "Price lookup failed.",
-      modelSummary: "The price lookup failed before returning a trusted result.",
-    };
-  }
-}
-
-async function readSwapQuote(
-  input: { inputMint: string; outputMint: string; sol: number },
-): Promise<AuthorizedAgentGraphToolResultDTO> {
-  try {
-    const quote = await fetchSwapQuote({
-      inputMint: input.inputMint,
-      outputMint: input.outputMint,
-      amountLamports: BigInt(Math.round(input.sol * LAMPORTS_PER_SOL)),
-    });
-    return {
-      tool: "get_swap_quote",
-      status: "succeeded",
-      summary:
-        `Quote: ${input.sol} SOL in -> ${quote.outAmount} base units of ${input.outputMint} out ` +
-        `(price impact ${quote.priceImpactPct ?? "unknown"}%). Jupiter mainnet route — nothing executed. ` +
-        `Executing a real swap needs a mainnet run (npm run agent:mainnet); it is not available in this session.`,
-      modelSummary:
-        `A swap quote was found: ${input.sol} SOL for approximately ${quote.outAmount} base units of the ` +
-        "output token. This is a quote only — execution is mainnet-only and out of scope here.",
-    };
-  } catch (error) {
-    return {
-      tool: "get_swap_quote",
-      status: "failed",
-      summary: error instanceof Error ? error.message : "Swap quote failed.",
-      modelSummary: "The swap quote failed before returning a trusted result.",
-    };
-  }
-}
-
-function mentionsAmount(goal: string, amount: number): boolean {
-  return (goal.match(/\d+(?:[.,]\d+)?/g) ?? []).some((value) =>
-    Math.abs(Number(value.replace(",", ".")) - amount) < Number.EPSILON);
-}
-
-function blocked(
-  tool: AgentGraphToolCallDTO["name"],
-  summary: string,
-): AuthorizedAgentGraphToolResultDTO {
-  return {
-    tool,
-    status: "blocked",
-    summary,
-    modelSummary: "The requested tool is unavailable in the current owner session.",
-  };
 }

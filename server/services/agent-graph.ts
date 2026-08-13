@@ -11,6 +11,7 @@ import {
   agentGraphModelExpansionSchema,
   agentGraphToolCallSchema,
 } from "../schema/agent-graph.schema";
+import { GRAPH_ACTION_DESCRIPTIONS } from "../../agent/graph-actions";
 
 const DEFAULT_MODEL = "gpt-4o-mini";
 const NODE_KINDS = new Set([
@@ -23,29 +24,16 @@ const NODE_KINDS = new Set([
   "blocked",
 ]);
 /**
- * Descriptions are written for the graph, not copied from `agent/tools/toolkit.ts`,
- * because the two runtimes genuinely return different things under the same tool
- * name — the CLI's `get_wallet_overview` reports cluster and SOL balance, while
- * the graph's returns owner and policy summary only. Reusing the CLI wording
- * would describe fields this path never produces.
- *
- * What *is* shared is the contract: every name here must be a real toolkit tool
- * (or an explicitly declared graph-only one), enforced by
- * tests/unit/services/agent-graph-coverage.test.ts so a toolkit tool can no
- * longer be added without someone deciding whether the graph should expose it.
+ * Descriptions come from the Agent Kit action registry rather than a copy kept
+ * here, so what the model is told a tool does cannot drift from what the tool
+ * actually implements. They are deliberately *not* shared with
+ * `agent/tools/toolkit.ts`: the CLI's `get_wallet_overview` reports cluster and
+ * SOL balance while the graph's reports owner and policy, so reusing that
+ * wording would describe fields this path never returns. The coverage test in
+ * tests/unit/services/agent-graph-coverage.test.ts is what keeps the two
+ * toolsets from silently diverging in membership.
  */
-const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
-  get_wallet_overview:
-    "Read the connected owner's local Agacy wallet and policy overview. Input must be {}. Read-only.",
-  check_on_chain_policy:
-    "Read the provisioned policy account from Solana devnet. Input must be {}. Read-only.",
-  authorize_policy_spend:
-    "Ask the deployed policy program to authorize a spend on devnet. Input: amountTokens, recipient, reasoning. This proves policy authorization only; it does not transfer tokens.",
-  get_token_price:
-    "Look up a token's real USD market price via Jupiter. Input: mint (token mint address). Read-only, no wallet needed.",
-  get_swap_quote:
-    "Get a real routed swap quote from Jupiter (mainnet market data, safe to call from any cluster). Input: inputMint, outputMint, sol (input amount). Read-only — does not execute anything.",
-};
+const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = GRAPH_ACTION_DESCRIPTIONS;
 
 /**
  * Toolkit tools the graph deliberately does not expose, with the reason.

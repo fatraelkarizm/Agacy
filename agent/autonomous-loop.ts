@@ -139,9 +139,17 @@ export async function runAutonomousAgent(
   // The guarded tools go through Agent Kit's own Vercel AI adapter rather than
   // being hand-converted, so the toolset stays usable by anything else that
   // speaks Agent Kit actions (LangChain, OpenAI, MCP) without a second bridge.
-  const aiTools = createVercelAITools(
-    options.agentKit,
-    toAgentKitActions(guarded),
+  const actions = toAgentKitActions(guarded);
+  const byIndex = createVercelAITools(options.agentKit, actions) as Record<string, CoreTool>;
+
+  // Agent Kit 2.0.10 keys its adapter output by array index
+  // (`tools[index.toString()]`), and the AI SDK sends each key to the model as
+  // the callable function name. Left as-is, the model chooses between tools
+  // named "0".."6" and has only the description to go on — so re-key by the
+  // action's real name, which is what every prompt and refusal message in this
+  // codebase already calls it.
+  const aiTools = Object.fromEntries(
+    actions.map((action, index) => [action.name, byIndex[String(index)]]),
   ) as Record<string, CoreTool>;
 
   const openai = createOpenAI({
