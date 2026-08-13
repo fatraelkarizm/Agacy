@@ -89,6 +89,8 @@ export interface AgentGraphExpansionRequestDTO {
    * owner-only `summary`, so accumulating them cannot widen what the model sees.
    */
   readonly observations?: readonly string[];
+  /** Tools already executed this session; the model is told, not left to guess. */
+  readonly completedTools?: readonly AgentGraphToolName[];
 }
 
 export interface AgentGraphChildDTO {

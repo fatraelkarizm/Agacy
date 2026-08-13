@@ -72,6 +72,11 @@ export const agentGraphExpansionRequestSchema = z.object({
   depth: z.number().int().min(0).max(4),
   lineage: z.array(z.string().trim().min(1).max(80)).max(5),
   availableTools: z.array(agentGraphToolNameSchema).max(8),
+  /**
+   * Tools that already ran in this session. Sent so the model can be told they
+   * are done rather than left to infer it from their silent absence.
+   */
+  completedTools: z.array(agentGraphToolNameSchema).max(8).optional(),
   // Bounded so a long run cannot grow the prompt without limit; the client
   // sends the most recent entries and drops older ones.
   observations: z.array(z.string().trim().min(1).max(400)).max(12).optional(),

@@ -159,6 +159,12 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
               observations: verifiedObservations.slice(-12),
               availableTools: availableTools.filter((tool) =>
                 tool === "authorize_policy_spend" || !completedReadTools.has(tool)),
+              // Sent as well as filtered. Removing a finished tool without
+              // saying so left the model to infer an absence it was never told
+              // about: it asked again, the request came back as an "unavailable"
+              // node, and a run whose payment had already succeeded ended on a
+              // red refusal. Naming them is what stops the re-ask.
+              completedTools: [...completedReadTools],
             }),
           });
           const payload = await response.json() as AgentGraphExpansionDTO | { error: string };

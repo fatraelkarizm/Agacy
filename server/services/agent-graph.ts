@@ -102,6 +102,14 @@ export async function expandAgentGraph(
         "Swap execution itself is mainnet-only and out of scope for this session even when get_swap_quote is available — after quoting, end with a blocked or complete node that honestly says execution requires a mainnet run (npm run agent:mainnet), not a plain unexplained refusal.",
         "When currentNode contains verified tool observations, treat those reads as complete. Continue reasoning from the observation; do not request the same tool again or mark the completed read as unavailable.",
         "verifiedObservations lists everything this run has already established, including results from other branches. Treat every entry as settled fact: build on it, never re-request a tool that produced one, and never contradict or re-ask for something already answered there.",
+        // Without this the model re-requests a tool it already used, that
+        // request is normalised into a red "not available" node, and a run whose
+        // payment actually succeeded ends looking like a failure.
+        ...(input.completedTools?.length
+          ? [
+              `These tools have ALREADY RUN successfully in this session and are finished: ${input.completedTools.join(", ")}. Their results are in verifiedObservations. Do not request them again — treat the work as done and move on to reporting or the next step.`,
+            ]
+          : []),
         "If the goal needs a capability that is not present at all in availableTools, emit a blocked node naming the missing capability.",
         "Keep labels short and details factual. Do not expose hidden chain-of-thought; provide concise action summaries only.",
       ].join("\n"),
@@ -118,7 +126,12 @@ export async function expandAgentGraph(
       }),
     });
 
-    return normalizeExpansion(toExpansion(result.object.children), finalDepth, input.availableTools);
+    return normalizeExpansion(
+      toExpansion(result.object.children),
+      finalDepth,
+      input.availableTools,
+      input.completedTools ?? [],
+    );
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error) && error.text) {
       const recovered = recoverExpansion(error.text, finalDepth, input.availableTools);
@@ -208,16 +221,24 @@ function normalizeExpansion(
   expansion: AgentGraphExpansionDTO,
   finalDepth: boolean,
   availableTools: readonly AgentGraphToolName[],
+  completedTools: readonly AgentGraphToolName[] = [],
 ): AgentGraphExpansionDTO {
   let expandable = 0;
   return {
     children: expansion.children.map((child): AgentGraphChildDTO => {
       if (child.kind === "tool") {
         if (!child.toolCall || !availableTools.includes(child.toolCall.name)) {
+          // A tool that already ran is a finished step, not a missing
+          // capability. Reporting both as "unavailable" ended an otherwise
+          // successful run on a red refusal node, which read as failure.
+          const alreadyDone =
+            child.toolCall !== undefined && completedTools.includes(child.toolCall.name);
           return {
             label: child.label,
-            detail: "The required tool is not available in this owner session.",
-            kind: "blocked",
+            detail: alreadyDone
+              ? "Already completed earlier in this session. Its result is in the verified observations."
+              : "The required tool is not available in this owner session.",
+            kind: alreadyDone ? "complete" : "blocked",
             expand: false,
           };
         }
