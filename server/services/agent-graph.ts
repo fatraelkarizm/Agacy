@@ -22,6 +22,18 @@ const NODE_KINDS = new Set([
   "complete",
   "blocked",
 ]);
+/**
+ * Descriptions are written for the graph, not copied from `agent/tools/toolkit.ts`,
+ * because the two runtimes genuinely return different things under the same tool
+ * name — the CLI's `get_wallet_overview` reports cluster and SOL balance, while
+ * the graph's returns owner and policy summary only. Reusing the CLI wording
+ * would describe fields this path never produces.
+ *
+ * What *is* shared is the contract: every name here must be a real toolkit tool
+ * (or an explicitly declared graph-only one), enforced by
+ * tests/unit/services/agent-graph-coverage.test.ts so a toolkit tool can no
+ * longer be added without someone deciding whether the graph should expose it.
+ */
 const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
   get_wallet_overview:
     "Read the connected owner's local Agacy wallet and policy overview. Input must be {}. Read-only.",
@@ -33,6 +45,28 @@ const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
     "Look up a token's real USD market price via Jupiter. Input: mint (token mint address). Read-only, no wallet needed.",
   get_swap_quote:
     "Get a real routed swap quote from Jupiter (mainnet market data, safe to call from any cluster). Input: inputMint, outputMint, sol (input amount). Read-only — does not execute anything.",
+};
+
+/**
+ * Toolkit tools the graph deliberately does not expose, with the reason.
+ *
+ * The graph runs in the browser against a session-scoped agent key, so anything
+ * needing a funded server-side payer, a provisioned confidential mint, or real
+ * mainnet funds cannot be driven from here.
+ */
+export const GRAPH_EXCLUDED_TOOLKIT_TOOLS: Record<string, string> = {
+  pay_vendor_confidentially:
+    "Needs a provisioned confidential mint, funded payer, and recipient ElGamal keys that only the devnet scripts set up.",
+  request_devnet_airdrop:
+    "Funds the CLI run's own payer keypair; the browser session has no such keypair to top up.",
+  swap_tokens:
+    "Executes a real mainnet swap. Deliberately unreachable from the browser demo — quoting is exposed instead.",
+};
+
+/** Graph-only tools with no toolkit equivalent, with the reason. */
+export const GRAPH_ONLY_TOOLS: Record<string, string> = {
+  authorize_policy_spend:
+    "Signs an authorize against the deployed policy program using the browser session's agent key, which the CLI toolkit has no concept of.",
 };
 
 export async function expandAgentGraph(
