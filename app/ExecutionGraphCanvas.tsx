@@ -37,6 +37,7 @@ import {
   focusedNodeIds,
   formatDuration,
   toolProvider,
+  paymentReceipt,
   layoutExecutionGraph,
   type ExecutionNode,
   type ExecutionNodeKind,
@@ -74,6 +75,7 @@ function ExecutionNodeCard({ data }: NodeProps<ExecutionFlowNode>) {
   const NodeIcon = KIND_ICON[node.kind];
   const duration = formatDuration(node);
   const provider = toolProvider(node);
+  const receipt = paymentReceipt(node);
 
   return (
     <div
@@ -83,6 +85,7 @@ function ExecutionNodeCard({ data }: NodeProps<ExecutionFlowNode>) {
         `xnode-status-${node.status}`,
         isSelected ? "is-selected" : "",
         isDimmed ? "is-dimmed" : "",
+        receipt ? (receipt.confidential ? "xnode-receipt" : "xnode-receipt-public") : "",
       ].join(" ")}
       style={{ width: NODE_WIDTH, height: NODE_HEIGHT }}
     >
@@ -93,6 +96,11 @@ function ExecutionNodeCard({ data }: NodeProps<ExecutionFlowNode>) {
       <span className="xnode-body">
         <span className="xnode-label">{node.label}</span>
         <span className="xnode-meta">
+          {receipt && (
+            <span className="xnode-badge">
+              {receipt.confidential ? "ENCRYPTED" : "PUBLIC"}
+            </span>
+          )}
           {provider && (
             <span className="xnode-provider" title={`${provider.gateway} → ${provider.upstream}`}>
               {/* Plain <img>, not next/image: these are tiny static marks inside a

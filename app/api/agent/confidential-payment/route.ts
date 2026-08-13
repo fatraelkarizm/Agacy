@@ -40,7 +40,7 @@ const REFILL_BELOW = 10_000_000n;
  * graph's execution path while leaving it perfectly ordinary at request time.
  */
 async function loadDeps() {
-  const [kit, clientMod, payerMod, mintMod, accountMod, keysMod, transferMod, balanceMod, token] =
+  const [kit, clientMod, payerMod, mintMod, accountMod, keysMod, transferMod, balanceMod, token, system] =
     await Promise.all([
       import("@solana/kit"),
       import("../../../../server/data/solana-client"),
@@ -51,6 +51,7 @@ async function loadDeps() {
       import("../../../../server/data/confidential-transfer"),
       import("../../../../server/data/confidential-balance"),
       import("@solana-program/token-2022"),
+      import("@solana-program/system"),
     ]);
   return {
     generateKeyPairSigner: kit.generateKeyPairSigner,
@@ -65,6 +66,12 @@ async function loadDeps() {
     executeConfidentialTransfer: transferMod.executeConfidentialTransfer,
     fetchConfidentialBalance: balanceMod.fetchConfidentialBalance,
     getMintToInstruction: token.getMintToInstruction,
+    getInitializeMint2Instruction: token.getInitializeMint2Instruction,
+    getInitializeAccount3Instruction: token.getInitializeAccount3Instruction,
+    getTransferCheckedInstruction: token.getTransferCheckedInstruction,
+    getMintSize: token.getMintSize,
+    TOKEN_2022_PROGRAM_ADDRESS: token.TOKEN_2022_PROGRAM_ADDRESS,
+    getCreateAccountInstruction: system.getCreateAccountInstruction,
   };
 }
 
@@ -125,16 +132,129 @@ async function provision(deps: Deps): Promise<ConfidentialEnvironment> {
   return { mint, sender, recipient, senderKeys, recipientKeys };
 }
 
+interface PublicEnvironment {
+  readonly mint: Address;
+  readonly sender: Address;
+  readonly recipient: Address;
+}
+
+let publicEnvironment: Promise<PublicEnvironment> | null = null;
+
+/**
+ * The comparison case: an ordinary SPL transfer on a mint with no confidential
+ * extension. Same cluster, same token amount, same explorer — the only
+ * difference is that the amount is sitting in the recipient's account data
+ * where anyone can read it.
+ *
+ * This exists so the privacy claim can be *shown* rather than asserted. A demo
+ * that only ever runs the private path asks the viewer to take on trust that
+ * the public path would have leaked; running both removes the trust.
+ */
+async function provisionPublic(deps: Deps): Promise<PublicEnvironment> {
+  const client = getClient(deps);
+  const payer = await deps.loadOrCreatePayer();
+
+  const mintSigner = await deps.generateKeyPairSigner();
+  // No argument: an empty extension list still reserves the extension header
+  // and InitializeMint2 rejects it. A mint with no extensions is the bare 82.
+  const mintSpace = BigInt(deps.getMintSize());
+  const mintRent = await client.rpc.getMinimumBalanceForRentExemption(mintSpace).send();
+  await deps.sendInstructions(client, payer, [
+    deps.getCreateAccountInstruction({
+      payer, newAccount: mintSigner, lamports: mintRent, space: mintSpace,
+      programAddress: deps.TOKEN_2022_PROGRAM_ADDRESS,
+    }),
+    deps.getInitializeMint2Instruction({
+      mint: mintSigner.address, decimals: DECIMALS,
+      mintAuthority: payer.address, freezeAuthority: null,
+    }),
+  ]);
+
+  const accountSpace = 165n;
+  const accountRent = await client.rpc.getMinimumBalanceForRentExemption(accountSpace).send();
+  const makeAccount = async (owner: { address: Address }) => {
+    const signer = await deps.generateKeyPairSigner();
+    await deps.sendInstructions(client, payer, [
+      deps.getCreateAccountInstruction({
+        payer, newAccount: signer, lamports: accountRent, space: accountSpace,
+        programAddress: deps.TOKEN_2022_PROGRAM_ADDRESS,
+      }),
+      deps.getInitializeAccount3Instruction({
+        account: signer.address, mint: mintSigner.address, owner: owner.address,
+      }),
+    ]);
+    return signer.address;
+  };
+
+  const sender = await makeAccount(payer);
+  const recipient = await makeAccount(await deps.generateKeyPairSigner());
+  await deps.sendInstructions(client, payer, [
+    deps.getMintToInstruction({
+      mint: mintSigner.address, token: sender, mintAuthority: payer, amount: MINT_SUPPLY,
+    }),
+  ]);
+
+  return { mint: mintSigner.address, sender, recipient };
+}
+
+async function payPublicly(deps: Deps, amount: bigint) {
+  const client = getClient(deps);
+  const payer = await deps.loadOrCreatePayer();
+  publicEnvironment ??= provisionPublic(deps);
+  const env = await publicEnvironment;
+
+  const started = Date.now();
+  const signature = await deps.sendInstructions(client, payer, [
+    deps.getTransferCheckedInstruction({
+      source: env.sender, mint: env.mint, destination: env.recipient,
+      authority: payer, amount, decimals: DECIMALS,
+    }),
+  ]);
+  return { signature, elapsedMs: Date.now() - started, env };
+}
+
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as { amountTokens?: unknown } | null;
+  const body = (await request.json().catch(() => null)) as {
+    amountTokens?: unknown;
+    mode?: unknown;
+  } | null;
   const amountTokens = typeof body?.amountTokens === "number" ? body.amountTokens : NaN;
   if (!Number.isFinite(amountTokens) || amountTokens <= 0 || amountTokens > 5) {
     return Response.json({ error: "amountTokens must be between 0 and 5" }, { status: 400 });
   }
+  // Anything that is not explicitly "public" pays privately. Defaulting the
+  // other way would mean a malformed request quietly publishing an amount.
+  const isPublic = body?.mode === "public";
 
   try {
     const deps = await loadDeps();
     const client = getClient(deps);
+
+    if (isPublic) {
+      const amount = BigInt(Math.round(amountTokens * 10 ** DECIMALS));
+      const { signature, elapsedMs, env } = await payPublicly(deps, amount);
+
+      const account = await client.rpc
+        .getAccountInfo(env.recipient, { commitment: "confirmed", encoding: "base64" })
+        .send();
+      const raw = Buffer.from(account.value?.data[0] ?? "", "base64");
+      const plaintext = Buffer.alloc(8);
+      plaintext.writeBigUInt64LE(amount);
+
+      return Response.json({
+        mode: "public",
+        signature,
+        mint: env.mint,
+        recipient: env.recipient,
+        amountTokens,
+        // Read back the same way as the private path. Expected to be true here
+        // — that is the point — but measured rather than assumed either way.
+        amountReadableOnChain: raw.includes(plaintext),
+        elapsedMs,
+        explorerUrl: `https://explorer.solana.com/tx/${signature}?cluster=devnet`,
+      });
+    }
+
     environment ??= provision(deps);
     const env = await environment;
     const payer = await deps.loadOrCreatePayer();
@@ -174,6 +294,7 @@ export async function POST(request: Request) {
     plaintext.writeBigUInt64LE(amount);
 
     return Response.json({
+      mode: "confidential",
       signature,
       mint: env.mint,
       recipient: env.recipient,
@@ -185,6 +306,7 @@ export async function POST(request: Request) {
   } catch (error) {
     // A failed provision must not be cached, or every later call inherits it.
     environment = null;
+    publicEnvironment = null;
     return Response.json(
       { error: error instanceof Error ? error.message : "Confidential transfer failed" },
       { status: 502 },

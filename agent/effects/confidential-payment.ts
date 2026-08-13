@@ -8,7 +8,10 @@
  * and only the result comes back here.
  */
 
+export type PaymentMode = "confidential" | "public";
+
 export interface ConfidentialPaymentReceipt {
+  readonly mode: PaymentMode;
   readonly signature: string;
   readonly mint: string;
   readonly recipient: string;
@@ -19,11 +22,14 @@ export interface ConfidentialPaymentReceipt {
   readonly explorerUrl: string;
 }
 
-export async function payConfidentially(amountTokens: number): Promise<ConfidentialPaymentReceipt> {
+export async function payConfidentially(
+  amountTokens: number,
+  mode: PaymentMode = "confidential",
+): Promise<ConfidentialPaymentReceipt> {
   const response = await fetch("/api/agent/confidential-payment", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ amountTokens }),
+    body: JSON.stringify({ amountTokens, mode }),
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;

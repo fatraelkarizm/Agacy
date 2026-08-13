@@ -50,6 +50,9 @@ export const agentGraphToolCallSchema = z.discriminatedUnion("name", [
     name: z.literal("pay_confidentially"),
     input: z.object({
       amountTokens: z.number().positive().max(5),
+      // Present so the arena can stamp the owner's choice onto the call. The
+      // model never sets it — see the override in AgentGraphArena.
+      mode: z.enum(["confidential", "public"]).optional(),
     }),
   }),
   z.object({

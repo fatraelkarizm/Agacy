@@ -46,6 +46,8 @@ export type AgentGraphToolCallDTO =
       readonly name: "pay_confidentially";
       readonly input: {
         readonly amountTokens: number;
+        /** Stamped by the owner's toggle, never chosen by the model. */
+        readonly mode?: "confidential" | "public";
       };
     }
   | {

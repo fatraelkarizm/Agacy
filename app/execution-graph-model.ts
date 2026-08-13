@@ -88,6 +88,23 @@ export function toolProvider(node: {
   return tool === undefined ? null : TOOL_PROVIDERS[tool] ?? null;
 }
 
+/**
+ * A payment receipt is not just another tool result. It is the only node in a
+ * run where value actually moved, and it carries the signature that makes the
+ * claim checkable — so it gets its own treatment rather than looking like a
+ * price lookup that happened to come last.
+ */
+export function paymentReceipt(node: {
+  readonly toolCall?: AgentGraphToolCallDTO;
+  readonly toolResult?: AuthorizedAgentGraphToolResultDTO;
+}): { readonly confidential: boolean; readonly signature: string } | null {
+  const result = node.toolResult;
+  if (result?.tool !== "pay_confidentially" || result.status !== "succeeded") return null;
+  if (!result.signature) return null;
+  // The summary is the only place the executed mode survives onto the node.
+  return { confidential: !result.summary.includes("IS readable"), signature: result.signature };
+}
+
 export function isAisaPowered(node: {
   readonly toolCall?: AgentGraphToolCallDTO;
   readonly toolResult?: AuthorizedAgentGraphToolResultDTO;

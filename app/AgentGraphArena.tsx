@@ -13,6 +13,8 @@ import {
   Crosshair,
   Eye,
   EyeSlash,
+  LockKey,
+  LockKeyOpen,
   MagnifyingGlassPlus,
   PaperPlaneTilt,
   Plus,
@@ -65,6 +67,12 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
     presenting.
   */
   const [ownerView, setOwnerView] = useState(false);
+  /*
+    Owner-controlled payment mode. Confidential by default: the safe setting
+    must be the one you get by not choosing.
+  */
+  const [paymentMode, setPaymentMode] = useState<"confidential" | "public">("confidential");
+  const paymentModeRef = useRef<"confidential" | "public">("confidential");
   const [goal, setGoal] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -76,6 +84,12 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
   useEffect(() => {
     followRef.current = follow;
   }, [follow]);
+
+  // Read from a ref inside growGraph so a mid-run toggle cannot retarget a
+  // payment the owner already set in motion.
+  useEffect(() => {
+    paymentModeRef.current = paymentMode;
+  }, [paymentMode]);
 
   useEffect(() => {
     if (composerOpen) textareaRef.current?.focus();
@@ -193,14 +207,30 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
           for (const child of children) {
             if (child.toolCall) {
               if (created >= MAX_NODES_PER_RUN) break;
-              const fingerprint = JSON.stringify(child.toolCall);
+              /*
+                The owner's payment mode is stamped here, overwriting whatever
+                the model asked for. Whether an amount is published is an
+                authority decision, not a planning one — the same reason the
+                spend limit lives in a program rather than in the prompt. A
+                prompt-injected agent must not be able to choose to publish.
+              */
+              const call: AgentGraphToolCallDTO = child.toolCall.name === "pay_confidentially"
+                ? {
+                    name: "pay_confidentially",
+                    input: {
+                      amountTokens: child.toolCall.input.amountTokens,
+                      mode: paymentModeRef.current,
+                    },
+                  }
+                : child.toolCall;
+              const fingerprint = JSON.stringify(call);
               const startedTool = Date.now();
-              patchNode(child.id, { status: "running", startedAt: startedTool });
+              patchNode(child.id, { status: "running", startedAt: startedTool, toolCall: call });
               focusNode(child.id);
-              setAnnouncement(`Executing ${child.toolCall.name}`);
+              setAnnouncement(`Executing ${call.name}`);
               const toolResult = executedToolCalls.has(fingerprint)
-                ? duplicateToolResult(child.toolCall)
-                : await onToolCall(child.toolCall, ownerGoal);
+                ? duplicateToolResult(call)
+                : await onToolCall(call, ownerGoal);
               executedToolCalls.add(fingerprint);
               if (child.toolCall.name !== "authorize_policy_spend") {
                 completedReadTools.add(child.toolCall.name);
@@ -327,6 +357,32 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall }: AgentGra
         </div>
         <p className="xgraph-goal">{goal ? `Goal: ${goal}` : "No goal sent yet."}</p>
         <div className="xgraph-actions">
+          {/*
+            Payment mode, not view mode. This decides what actually lands
+            on-chain, so it sits next to the other run controls rather than
+            hiding in a settings pane — and it is the owner's switch, never the
+            model's.
+          */}
+          <div className="xmode" role="group" aria-label="Payment mode">
+            <button
+              className={paymentMode === "confidential" ? "is-on" : ""}
+              onClick={() => setPaymentMode("confidential")}
+              aria-pressed={paymentMode === "confidential"}
+              disabled={running}
+            >
+              <LockKey aria-hidden="true" size={14} weight="duotone" />
+              Confidential
+            </button>
+            <button
+              className={paymentMode === "public" ? "is-on is-public" : ""}
+              onClick={() => setPaymentMode("public")}
+              aria-pressed={paymentMode === "public"}
+              disabled={running}
+            >
+              <LockKeyOpen aria-hidden="true" size={14} weight="duotone" />
+              Public
+            </button>
+          </div>
           <button
             className={ownerView ? "is-active" : ""}
             onClick={() => setOwnerView((value) => !value)}

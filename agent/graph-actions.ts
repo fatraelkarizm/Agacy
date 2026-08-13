@@ -80,7 +80,14 @@ export const confidentialPaymentInputSchema = z.object({
     .number()
     .positive()
     .max(5)
-    .describe("Amount in whole tokens to move confidentially on the devnet demo mint"),
+    .describe("Amount in whole tokens to move on the devnet demo mint"),
+  /**
+   * Owner-controlled, never model-controlled. The arena overwrites whatever
+   * arrives here with the owner's toggle before the handler runs, so a
+   * prompt-injected agent cannot decide to publish an amount — the same
+   * separation the spend policy enforces for limits.
+   */
+  mode: z.enum(["confidential", "public"]).optional(),
 });
 
 export const swapQuoteInputSchema = z.object({
@@ -398,12 +405,14 @@ async function researchCounterparty(
 async function runConfidentialPayment(
   input: z.infer<typeof confidentialPaymentInputSchema>,
 ): Promise<AuthorizedAgentGraphToolResultDTO> {
+  const mode = input.mode ?? "confidential";
   try {
-    const receipt = await payConfidentially(input.amountTokens);
+    const receipt = await payConfidentially(input.amountTokens, mode);
 
-    // If the amount ever *is* readable, that is a failed privacy claim, not a
-    // successful payment. Reported as such rather than quietly succeeding.
-    if (receipt.amountReadableOnChain) {
+    // In confidential mode a readable amount is a failed privacy claim, not a
+    // successful payment. In public mode a readable amount is the entire point,
+    // so the guard is scoped rather than global.
+    if (mode === "confidential" && receipt.amountReadableOnChain) {
       return {
         tool: "pay_confidentially",
         status: "failed",
@@ -413,16 +422,20 @@ async function runConfidentialPayment(
       };
     }
 
+    const seconds = (receipt.elapsedMs / 1000).toFixed(1);
     return {
       tool: "pay_confidentially",
       status: "succeeded",
-      summary:
-        `Moved ${input.amountTokens} tokens confidentially on devnet in ${(receipt.elapsedMs / 1000).toFixed(1)}s. ` +
-        `The amount is NOT readable in the recipient's account data. Demo mint ${receipt.mint}, not owner funds. ` +
-        `Signature: ${receipt.signature}`,
-      modelSummary:
-        `A confidential transfer completed on devnet and the amount was verified unreadable on-chain. ` +
-        `This used a demo mint, not the owner's funds. Exact values and addresses were withheld.`,
+      summary: mode === "public"
+        ? `Paid ${input.amountTokens} tokens as an ordinary SPL transfer in ${seconds}s. ` +
+          `The amount IS readable in the recipient's account data — anyone can read it on Solana Explorer. ` +
+          `Demo mint ${receipt.mint}, not owner funds. Signature: ${receipt.signature}`
+        : `Moved ${input.amountTokens} tokens confidentially on devnet in ${seconds}s. ` +
+          `The amount is NOT readable in the recipient's account data. Demo mint ${receipt.mint}, not owner funds. ` +
+          `Signature: ${receipt.signature}`,
+      modelSummary: mode === "public"
+        ? "An ordinary public transfer completed on devnet. The amount is visible on-chain to anyone. This used a demo mint, not the owner's funds."
+        : "A confidential transfer completed on devnet and the amount was verified unreadable on-chain. This used a demo mint, not the owner's funds. Exact values and addresses were withheld.",
       signature: receipt.signature,
     };
   } catch (error) {
