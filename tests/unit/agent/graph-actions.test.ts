@@ -3,6 +3,7 @@ import { createVercelAITools, type Action } from "solana-agent-kit";
 import {
   createAgacyGraphPlugin,
   createGraphActions,
+  goalAuthorizesTokenAmount,
   GRAPH_ACTION_DESCRIPTIONS,
 } from "@agent/graph-actions";
 import { agentGraphToolNameSchema } from "../../../server/schema/agent-graph.schema";
@@ -116,5 +117,23 @@ describe("graph action handlers", () => {
 
     // policyAccount is null here, so it stops before reaching the chain.
     expect(result["status"]).toBe("blocked");
+  });
+
+  it("blocks a model-invented confidential payment amount", async () => {
+    const payment = actions.find((action) => action.name === "pay_confidentially");
+    const result = await payment!.handler(undefined as never, {
+      amountTokens: 5,
+      mode: "confidential",
+    });
+
+    expect(result["status"]).toBe("blocked");
+    expect(String(result["summary"])).toContain("does not explicitly authorize 5 demo tokens");
+  });
+
+  it("only recognizes token-adjacent amounts as payment authority", () => {
+    expect(goalAuthorizesTokenAmount("Pay the approved 2-token invoice.", 2)).toBe(true);
+    expect(goalAuthorizesTokenAmount("Pay 2.5 tokens confidentially.", 2.5)).toBe(true);
+    expect(goalAuthorizesTokenAmount("Proposal 5 says to pay the vendor.", 5)).toBe(false);
+    expect(goalAuthorizesTokenAmount("Pay 2 tokens confidentially.", 5)).toBe(false);
   });
 });

@@ -213,7 +213,7 @@ export function createGraphActions(context: GraphActionContext): Action[] {
       }]],
       schema: confidentialPaymentInputSchema,
       handler: async (_agent, input) =>
-        runConfidentialPayment(confidentialPaymentInputSchema.parse(input)),
+        runConfidentialPayment(context, confidentialPaymentInputSchema.parse(input)),
     },
     {
       name: "get_swap_quote",
@@ -403,8 +403,18 @@ async function researchCounterparty(
  * demo with a false claim, and the whole submission rests on not doing that.
  */
 async function runConfidentialPayment(
+  context: GraphActionContext,
   input: z.infer<typeof confidentialPaymentInputSchema>,
 ): Promise<AuthorizedAgentGraphToolResultDTO> {
+  if (!goalAuthorizesTokenAmount(context.ownerGoal, input.amountTokens)) {
+    return {
+      tool: "pay_confidentially",
+      status: "blocked",
+      summary: `Payment blocked: the owner goal does not explicitly authorize ${input.amountTokens} demo tokens. Ask the owner for an exact token amount.`,
+      modelSummary: "The payment amount was not explicitly present in the owner's goal. Ask the owner for the amount; do not guess.",
+    };
+  }
+
   const mode = input.mode ?? "confidential";
   try {
     const receipt = await payConfidentially(input.amountTokens, mode);
@@ -645,6 +655,11 @@ async function authorizeSpend(
 function mentionsAmount(goal: string, amount: number): boolean {
   return (goal.match(/\d+(?:[.,]\d+)?/g) ?? []).some((value) =>
     Math.abs(Number(value.replace(",", ".")) - amount) < Number.EPSILON);
+}
+
+export function goalAuthorizesTokenAmount(goal: string, amount: number): boolean {
+  return [...goal.matchAll(/\b(\d+(?:[.,]\d+)?)\s*(?:-\s*)?tokens?\b/gi)].some((match) =>
+    Math.abs(Number(match[1]?.replace(",", ".")) - amount) < Number.EPSILON);
 }
 
 function blocked(

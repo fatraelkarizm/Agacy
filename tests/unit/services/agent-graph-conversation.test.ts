@@ -47,6 +47,69 @@ describe("agent graph conversation", () => {
     });
   });
 
+  it("asks for an amount before planning a consequential payment", async () => {
+    const result = await expandAgentGraph({
+      goal: "Pay the vendor confidentially.",
+      parent: { label: "Pay vendor", detail: "Pay vendor", kind: "agent" },
+      depth: 0,
+      lineage: ["Pay vendor"],
+      availableTools: ["pay_confidentially"],
+    });
+
+    expect(result.children).toEqual([expect.objectContaining({
+      label: "Clarification needed",
+      kind: "blocked",
+      detail: expect.stringContaining("How many demo tokens"),
+    })]);
+  });
+
+  it("rejects an out-of-range payment amount before any tool is planned", async () => {
+    const result = await expandAgentGraph({
+      goal: "Pay the vendor 8 tokens confidentially.",
+      parent: { label: "Pay vendor", detail: "Pay vendor", kind: "agent" },
+      depth: 0,
+      lineage: ["Pay vendor"],
+      availableTools: ["pay_confidentially"],
+    });
+
+    expect(result.children[0]).toMatchObject({
+      label: "Clarification needed",
+      kind: "blocked",
+    });
+  });
+
+  it("answers Agacy privacy questions without inventing tool work", async () => {
+    const result = await expandAgentGraph({
+      goal: "What does Agacy encrypt?",
+      parent: { label: "Privacy question", detail: "Privacy question", kind: "agent" },
+      depth: 0,
+      lineage: ["Privacy question"],
+      availableTools: tools,
+    });
+
+    expect(result.children).toEqual([expect.objectContaining({
+      label: "Agacy privacy boundary",
+      kind: "complete",
+      detail: expect.stringContaining("timing, fees, and program interactions remain public"),
+    })]);
+  });
+
+  it("answers capability questions with the actual supported scope", async () => {
+    const result = await expandAgentGraph({
+      goal: "What can you do?",
+      parent: { label: "Capabilities", detail: "Capabilities", kind: "agent" },
+      depth: 0,
+      lineage: ["Capabilities"],
+      availableTools: tools,
+    });
+
+    expect(result.children[0]).toMatchObject({
+      label: "Available capabilities",
+      kind: "complete",
+    });
+    expect(result.children[0]?.detail).toContain("explicit token amount");
+  });
+
   it.each([
     ["Hi", []],
     ["Check my wallet overview.", ["get_wallet_overview"]],

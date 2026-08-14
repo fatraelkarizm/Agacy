@@ -102,6 +102,49 @@ export async function expandAgentGraph(
     };
   }
 
+  if (/\bwhat can you do\b|\bcapabilit(?:y|ies)\b/i.test(input.goal)) {
+    return {
+      children: [{
+        label: "Available capabilities",
+        detail: "I can inspect the connected wallet and on-chain policy, check and cross-check token prices, research counterparties, quote swaps, and execute a devnet confidential payment after the owner supplies an explicit token amount.",
+        kind: "complete",
+        expand: false,
+      }],
+    };
+  }
+
+  if (
+    /\bagacy\b/i.test(input.goal) &&
+    /\b(encrypt(?:ed|ion)?|private|privacy|confidential|hide|hidden|protect(?:ed|ion)?)\b/i.test(input.goal)
+  ) {
+    return {
+      children: [{
+        label: "Agacy privacy boundary",
+        detail: "Agacy protects payment amounts, confidential balances, spending limits, and encrypted agent reasoning. Transaction existence, accounts, timing, fees, and program interactions remain public on Solana.",
+        kind: "complete",
+        expand: false,
+      }],
+    };
+  }
+
+  const paymentIntent = /\b(pay|payment|send|settle|release|renew|renewal|payout|invoice)\b/i.test(input.goal);
+  if (paymentIntent && !input.completedTools?.includes("pay_confidentially")) {
+    const amount = input.goal.match(/\b(\d+(?:[.,]\d+)?)\s*(?:-\s*)?tokens?\b/i);
+    const amountTokens = amount ? Number(amount[1]?.replace(",", ".")) : null;
+    if (amountTokens === null || amountTokens <= 0 || amountTokens > 5) {
+      return {
+        children: [{
+          label: "Clarification needed",
+          detail: amountTokens === null
+            ? "How many demo tokens should I pay? Include an explicit amount greater than 0 and no more than 5 tokens before I move value."
+            : "This devnet demo can move more than 0 and at most 5 tokens. What valid amount should I use?",
+          kind: "blocked",
+          expand: false,
+        }],
+      };
+    }
+  }
+
   if (
     input.completedTools?.includes("pay_confidentially") &&
     input.observations?.some((value) => /confidential.*(?:settled|completed)/i.test(value))
@@ -144,6 +187,7 @@ export async function expandAgentGraph(
         "Return 1-4 children. At most two children may have expand=true.",
         "For greetings, acknowledgements, or other non-actionable conversation, return exactly one complete child and use no tools.",
         "For vague or consequential goals missing required details, return one blocked child asking for the missing detail; do not invent work to make the graph look busy.",
+        "Public product facts: Agacy protects payment amounts, confidential balances, spending limits, and encrypted agent reasoning. Transaction existence, accounts, timing, fees, and program interactions remain public on Solana. Answer product questions from these facts without tools.",
         "When verified prerequisites are still pending, request only those tools now. Do not add placeholder reason, refusal, or payment nodes beside them; continue after their observations arrive.",
         "Never place pay_confidentially in the same response as wallet, price, research, quote, or policy tools. Payment is a later wave after their verified observations.",
         "If you emit any tool call, emit only tool children in that response. Report completion only after the tool result returns.",
