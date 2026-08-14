@@ -127,7 +127,21 @@ describe("graph action handlers", () => {
     });
 
     expect(result["status"]).toBe("blocked");
-    expect(String(result["summary"])).toContain("does not explicitly authorize 5 demo tokens");
+    expect(String(result["summary"])).toContain("must explicitly authorize 5 demo tokens");
+  });
+
+  it("blocks an amount when the owner did not approve the provisioned demo recipient", async () => {
+    const payment = createGraphActions({
+      ...context,
+      ownerGoal: "Pay the vendor 2 tokens confidentially.",
+    }).find((action) => action.name === "pay_confidentially");
+    const result = await payment!.handler(undefined as never, {
+      amountTokens: 2,
+      mode: "confidential",
+    });
+
+    expect(result["status"]).toBe("blocked");
+    expect(String(result["summary"])).toContain("provisioned demo recipient");
   });
 
   it("only recognizes token-adjacent amounts as payment authority", () => {

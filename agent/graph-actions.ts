@@ -406,12 +406,13 @@ async function runConfidentialPayment(
   context: GraphActionContext,
   input: z.infer<typeof confidentialPaymentInputSchema>,
 ): Promise<AuthorizedAgentGraphToolResultDTO> {
-  if (!goalAuthorizesTokenAmount(context.ownerGoal, input.amountTokens)) {
+  if (!goalAuthorizesTokenAmount(context.ownerGoal, input.amountTokens) ||
+      !goalAuthorizesDemoRecipient(context.ownerGoal)) {
     return {
       tool: "pay_confidentially",
       status: "blocked",
-      summary: `Payment blocked: the owner goal does not explicitly authorize ${input.amountTokens} demo tokens. Ask the owner for an exact token amount.`,
-      modelSummary: "The payment amount was not explicitly present in the owner's goal. Ask the owner for the amount; do not guess.",
+      summary: `Payment blocked: the owner goal must explicitly authorize ${input.amountTokens} demo tokens and the provisioned demo recipient. Ask the owner; do not infer either choice.`,
+      modelSummary: "The amount or provisioned demo recipient was not explicitly authorized in the owner's goal. Ask the owner; do not guess.",
     };
   }
 
@@ -660,6 +661,10 @@ function mentionsAmount(goal: string, amount: number): boolean {
 export function goalAuthorizesTokenAmount(goal: string, amount: number): boolean {
   return [...goal.matchAll(/\b(\d+(?:[.,]\d+)?)\s*(?:-\s*)?tokens?\b/gi)].some((match) =>
     Math.abs(Number(match[1]?.replace(",", ".")) - amount) < Number.EPSILON);
+}
+
+function goalAuthorizesDemoRecipient(goal: string): boolean {
+  return /\b(?:provisioned|demo)\b.*\b(?:recipient|vendor|wallet)\b/i.test(goal);
 }
 
 function blocked(

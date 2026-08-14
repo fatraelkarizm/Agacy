@@ -106,7 +106,7 @@ export async function expandAgentGraph(
     return {
       children: [{
         label: "Available capabilities",
-        detail: "I can inspect the connected wallet and on-chain policy, check and cross-check token prices, research counterparties, quote swaps, and execute a devnet confidential payment after the owner supplies an explicit token amount.",
+        detail: "I can inspect the connected wallet and on-chain policy, check and cross-check token prices, research counterparties, quote swaps, and execute a devnet confidential payment to the provisioned demo recipient after the owner supplies an explicit token amount.",
         kind: "complete",
         expand: false,
       }],
@@ -136,8 +136,18 @@ export async function expandAgentGraph(
         children: [{
           label: "Clarification needed",
           detail: amountTokens === null
-            ? "How many demo tokens should I pay? Include an explicit amount greater than 0 and no more than 5 tokens before I move value."
+            ? "How many demo tokens should I pay? This browser demo can only use its provisioned confidential recipient, not an arbitrary vendor wallet. Confirm that recipient and include an amount greater than 0 and no more than 5 tokens."
             : "This devnet demo can move more than 0 and at most 5 tokens. What valid amount should I use?",
+          kind: "blocked",
+          expand: false,
+        }],
+      };
+    }
+    if (!goalAuthorizesDemoRecipient(input.goal)) {
+      return {
+        children: [{
+          label: "Clarification needed",
+          detail: `This browser demo cannot pay an arbitrary vendor wallet because a confidential recipient account and keys must be provisioned first. Should I use the provisioned demo recipient for this ${amountTokens}-token demonstration?`,
           kind: "blocked",
           expand: false,
         }],
@@ -184,12 +194,13 @@ export async function expandAgentGraph(
         "First identify the owner's explicit outcome, required facts, ordering, and stop condition. Every child must be directly required by that goal or by an unavoidable prerequisite.",
         "Use the minimum next actions. A tool being available is never a reason to call it.",
         "Break the current node into the smallest useful next observations, reasoning steps, tool calls, policy checks, or results.",
-        "Return 1-4 children. At most two children may have expand=true.",
+        "Return 1-4 children. At most one child may have expand=true; merge related reasoning into that single continuation.",
         "For greetings, acknowledgements, or other non-actionable conversation, return exactly one complete child and use no tools.",
         "For vague or consequential goals missing required details, return one blocked child asking for the missing detail; do not invent work to make the graph look busy.",
         "Public product facts: Agacy protects payment amounts, confidential balances, spending limits, and encrypted agent reasoning. Transaction existence, accounts, timing, fees, and program interactions remain public on Solana. Answer product questions from these facts without tools.",
         "When verified prerequisites are still pending, request only those tools now. Do not add placeholder reason, refusal, or payment nodes beside them; continue after their observations arrive.",
         "Never place pay_confidentially in the same response as wallet, price, research, quote, or policy tools. Payment is a later wave after their verified observations.",
+        "A payment goal is not complete merely because its prerequisite reads finished. If pay_confidentially remains available after those observations and none of them says to stop, call it before reporting completion.",
         "If you emit any tool call, emit only tool children in that response. Report completion only after the tool result returns.",
         "Once verifiedObservations says the confidential payment settled, return exactly one complete child and stop.",
         finalDepth
@@ -250,6 +261,10 @@ export async function expandAgentGraph(
   }
 }
 
+function goalAuthorizesDemoRecipient(goal: string): boolean {
+  return /\b(?:provisioned|demo)\b.*\b(?:recipient|vendor|wallet)\b/i.test(goal);
+}
+
 function recoverExpansion(
   text: string,
   finalDepth: boolean,
@@ -271,7 +286,7 @@ function recoverExpansion(
       const kind = typeof value["kind"] === "string" && NODE_KINDS.has(value["kind"])
         ? value["kind"]
         : "reason";
-      const expand = !finalDepth && value["expand"] === true && expandable < 2;
+      const expand = !finalDepth && value["expand"] === true && expandable < 1;
       if (expand) expandable += 1;
       const toolCall = parseToolCall(value);
       return [{
@@ -365,7 +380,7 @@ function normalizeExpansion(
         }
         return { ...child, expand: false };
       }
-      const expand = !finalDepth && child.expand && expandable < 2;
+      const expand = !finalDepth && child.expand && expandable < 1;
       if (expand) expandable += 1;
       return { ...child, expand, toolCall: undefined };
     }),

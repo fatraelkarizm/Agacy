@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-08-14T04:57:47.976Z",
+  "capturedAt": "2026-08-14T08:13:53.300Z",
   "note": "Multi-round planning audit with synthetic redacted tool observations. It verifies goal alignment and sequencing, not tool execution; browser/devnet runs prove execution.",
   "model": "gpt-4o-mini",
   "availableTools": [
@@ -14,15 +14,13 @@
     {
       "id": "dao-treasury",
       "persona": "DAO treasury operator",
-      "goal": "Proposal AGP-27 passed and the contributor milestone was accepted. Confirm the treasury can cover the approved 2-token payout, then release it confidentially so the contributor's compensation and the DAO's runway are not exposed publicly.",
+      "goal": "Proposal AGP-27 passed and the contributor milestone was accepted. Demonstrate the approved payout by executing a 2-token confidential payment to the provisioned demo recipient. Prove the amount is hidden, and do not claim to pay the real contributor.",
       "agentPurpose": "custom",
-      "planningMs": 4002,
+      "planningMs": 2175,
       "toolsChosen": [
-        "get_wallet_overview",
         "pay_confidentially"
       ],
       "expectedTools": [
-        "get_wallet_overview",
         "pay_confidentially"
       ],
       "terminal": true,
@@ -31,17 +29,7 @@
       "steps": [
         {
           "round": 1,
-          "label": "Check treasury balance",
-          "kind": "tool",
-          "expand": false,
-          "toolCall": {
-            "name": "get_wallet_overview",
-            "input": {}
-          }
-        },
-        {
-          "round": 2,
-          "label": "Release payment confidentially",
+          "label": "Execute confidential payment",
           "kind": "tool",
           "expand": false,
           "toolCall": {
@@ -52,7 +40,7 @@
           }
         },
         {
-          "round": 3,
+          "round": 2,
           "label": "Goal complete",
           "kind": "complete",
           "expand": false
@@ -62,18 +50,14 @@
     {
       "id": "sme-procurement",
       "persona": "Startup / SME procurement",
-      "goal": "Our monthly Solana RPC vendor invoice has been approved for payment. Verify the SOL reference price at mint So11111111111111111111111111111111111111112 using two independent sources, check for any recent vendor outage or security incident, then settle the 1-token invoice confidentially so competitors cannot infer our supplier rate.",
+      "goal": "Our monthly Solana RPC vendor invoice has been approved for a privacy demonstration. Check for any recent vendor outage or security incident, then execute a 1-token confidential payment to the provisioned demo recipient. The run is not complete until that payment settles, and it must not claim to pay the real vendor.",
       "agentPurpose": "procurement",
-      "planningMs": 5765,
+      "planningMs": 3842,
       "toolsChosen": [
-        "get_token_price",
-        "cross_check_token_price",
         "research_counterparty",
         "pay_confidentially"
       ],
       "expectedTools": [
-        "get_token_price",
-        "cross_check_token_price",
         "research_counterparty",
         "pay_confidentially"
       ],
@@ -83,43 +67,19 @@
       "steps": [
         {
           "round": 1,
-          "label": "Verify SOL price via Jupiter",
-          "kind": "tool",
-          "expand": false,
-          "toolCall": {
-            "name": "get_token_price",
-            "input": {
-              "mint": "So11111111111111111111111111111111111111112"
-            }
-          }
-        },
-        {
-          "round": 1,
-          "label": "Cross-check SOL price via CoinGecko",
-          "kind": "tool",
-          "expand": false,
-          "toolCall": {
-            "name": "cross_check_token_price",
-            "input": {
-              "mint": "So11111111111111111111111111111111111111112"
-            }
-          }
-        },
-        {
-          "round": 1,
-          "label": "Research vendor for outages or incidents",
+          "label": "Check for vendor incidents",
           "kind": "tool",
           "expand": false,
           "toolCall": {
             "name": "research_counterparty",
             "input": {
-              "query": "recent news about Solana RPC vendor"
+              "query": "recent Solana RPC vendor outage or security incident"
             }
           }
         },
         {
           "round": 2,
-          "label": "Settle invoice confidentially",
+          "label": "Execute confidential payment",
           "kind": "tool",
           "expand": false,
           "toolCall": {
@@ -140,15 +100,13 @@
     {
       "id": "protocol-keeper",
       "persona": "Web3 protocol / agent platform",
-      "goal": "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Confirm the operations wallet can cover the approved 1-token keeper reward, then settle it confidentially so the protocol does not publish operator compensation or treasury balance.",
+      "goal": "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Demonstrate the approved reward by executing a 1-token confidential payment to the provisioned demo recipient. Prove the amount is hidden, and do not claim to pay the real operator.",
       "agentPurpose": "custom",
-      "planningMs": 4056,
+      "planningMs": 1182,
       "toolsChosen": [
-        "get_wallet_overview",
         "pay_confidentially"
       ],
       "expectedTools": [
-        "get_wallet_overview",
         "pay_confidentially"
       ],
       "terminal": true,
@@ -157,17 +115,7 @@
       "steps": [
         {
           "round": 1,
-          "label": "Check wallet overview",
-          "kind": "tool",
-          "expand": false,
-          "toolCall": {
-            "name": "get_wallet_overview",
-            "input": {}
-          }
-        },
-        {
-          "round": 2,
-          "label": "Settle keeper reward confidentially",
+          "label": "Execute confidential payment",
           "kind": "tool",
           "expand": false,
           "toolCall": {
@@ -178,7 +126,7 @@
           }
         },
         {
-          "round": 3,
+          "round": 2,
           "label": "Goal complete",
           "kind": "complete",
           "expand": false
@@ -188,16 +136,14 @@
     {
       "id": "individual",
       "persona": "Individual power user",
-      "goal": "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check that my wallet can cover it and whether the provider has reported a recent breach or outage that should stop renewal, then pay confidentially so the subscription amount is not added to my public spending profile.",
+      "goal": "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check whether the provider has reported a recent breach or outage that should stop renewal, then execute a 1-token confidential payment to the provisioned demo recipient without claiming to pay the real provider.",
       "agentPurpose": "subscriptions",
-      "planningMs": 5648,
+      "planningMs": 3247,
       "toolsChosen": [
-        "get_wallet_overview",
         "research_counterparty",
         "pay_confidentially"
       ],
       "expectedTools": [
-        "get_wallet_overview",
         "research_counterparty",
         "pay_confidentially"
       ],
@@ -207,29 +153,19 @@
       "steps": [
         {
           "round": 1,
-          "label": "Check wallet overview",
-          "kind": "tool",
-          "expand": false,
-          "toolCall": {
-            "name": "get_wallet_overview",
-            "input": {}
-          }
-        },
-        {
-          "round": 1,
-          "label": "Research provider status",
+          "label": "Check for breaches or outages",
           "kind": "tool",
           "expand": false,
           "toolCall": {
             "name": "research_counterparty",
             "input": {
-              "query": "market-data subscription provider breach or outage"
+              "query": "market-data provider breach or outage"
             }
           }
         },
         {
           "round": 2,
-          "label": "Pay subscription confidentially",
+          "label": "Execute confidential payment",
           "kind": "tool",
           "expand": false,
           "toolCall": {
