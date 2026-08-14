@@ -652,19 +652,34 @@ export default function DashboardPage() {
       onLanding={() => router.push("/")}
     >
       {dashboardSection === "graph" && graphAgentSelected && agent ? (
-        <>
-          <RealPaymentSetup
-            treasury={realTreasury}
-            vendor={vendorProfile}
-            busy={realPaymentBusy}
-            error={realPaymentError}
-            ready={realPaymentReady}
-            agentReady={agentSessionActive}
-            sessionActive={realPaymentSessionActive}
-            onCreateTreasury={(amount) => void createTreasury(amount)}
-            onImportVendor={importVendor}
-            onRecoverTreasury={() => void recoverTreasury()}
-          />
+        <div className="agent-graph-workspace">
+          <details className="payment-capability">
+            <summary>
+              <span>
+                <strong>Confidential payments</strong>
+                <small>Optional capability · set up only for payment goals</small>
+              </span>
+              <span className={realPaymentReady ? "is-ready" : ""}>
+                {realPaymentReady
+                  ? "Ready"
+                  : realTreasury && !realPaymentSessionActive
+                    ? "Recovery required"
+                    : "Configure"}
+              </span>
+            </summary>
+            <RealPaymentSetup
+              treasury={realTreasury}
+              vendor={vendorProfile}
+              busy={realPaymentBusy}
+              error={realPaymentError}
+              ready={realPaymentReady}
+              agentReady={agentSessionActive}
+              sessionActive={realPaymentSessionActive}
+              onCreateTreasury={(amount) => void createTreasury(amount)}
+              onImportVendor={importVendor}
+              onRecoverTreasury={() => void recoverTreasury()}
+            />
+          </details>
           <AgentGraphArena
             agentPurpose={agent.purpose}
             availableTools={availableTools}
@@ -672,7 +687,7 @@ export default function DashboardPage() {
             persistenceKey={`${ownerWallet.address}.${agent.name}`}
             onExit={() => navigateDashboard("overview")}
           />
-        </>
+        </div>
       ) : dashboardSection === "onboarding" ? (
         <AgentSetup
           draft={setupDraft}

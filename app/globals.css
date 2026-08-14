@@ -33,6 +33,41 @@
 }
 
 /* Real-payment setup: trust-first, compact, and visibly separate from graph output. */
+.agent-graph-workspace {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.payment-capability {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(10, 9, 20, 0.72);
+}
+
+.payment-capability > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 52px;
+  padding: 10px 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.payment-capability > summary::-webkit-details-marker { display: none; }
+.payment-capability > summary > span:first-child { display: grid; gap: 2px; }
+.payment-capability > summary strong { color: var(--text); font-size: 0.8rem; font-weight: 580; }
+.payment-capability > summary small { color: var(--text-faint); font-size: 0.68rem; }
+.payment-capability > summary > span:last-child { color: var(--violet-bright); font: 0.61rem var(--mono); text-transform: uppercase; }
+.payment-capability > summary > span.is-ready { color: var(--private); }
+.payment-capability[open] > summary { border-bottom: 1px solid var(--border); }
+.payment-capability > .real-payment-setup { margin: 0; border: 0; border-radius: 0 0 10px 10px; background: transparent; }
+
 .real-payment-setup {
   margin: 0 0 16px;
   padding: 22px;
@@ -1852,29 +1887,6 @@ button.primary:hover:not(:disabled) {
   .xprivacy-trace ol { grid-column: 1 / -1; justify-content: flex-start; overflow-x: auto; }
   .xprivacy-accounting { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-
-/* ---- payment mode toggle ---- */
-
-.xmode { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-
-.xmode button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  color: var(--text-faint);
-  font-size: 0.74rem;
-}
-
-.xmode button + button { border-left: 1px solid var(--border); }
-.xmode button:disabled { opacity: 0.5; }
-.xmode button.is-on { background: rgba(74, 222, 155, 0.12); color: var(--private); }
-/* Public is not an error, but it is the setting that publishes an amount, so it
-   carries the same colour the app uses everywhere else for exposure. */
-.xmode button.is-on.is-public { background: var(--exposed-dim); color: var(--exposed); }
 
 /* ---- payment receipt node ---- */
 

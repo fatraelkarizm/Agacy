@@ -13,8 +13,6 @@ import {
   Crosshair,
   Eye,
   EyeSlash,
-  LockKey,
-  LockKeyOpen,
   MagnifyingGlassPlus,
   PaperPlaneTilt,
   Plus,
@@ -65,7 +63,6 @@ interface StoredGraphState {
   readonly nodes: readonly ExecutionNode[];
   readonly goal: string;
   readonly startedAt: number | null;
-  readonly paymentMode: "confidential" | "public";
 }
 
 export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCall, persistenceKey }: AgentGraphArenaProps) {
@@ -83,12 +80,6 @@ export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCa
     presenting.
   */
   const [ownerView, setOwnerView] = useState(false);
-  /*
-    Owner-controlled payment mode. Confidential by default: the safe setting
-    must be the one you get by not choosing.
-  */
-  const [paymentMode, setPaymentMode] = useState<"confidential" | "public">("confidential");
-  const paymentModeRef = useRef<"confidential" | "public">("confidential");
   const [goal, setGoal] = useState("");
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -107,7 +98,6 @@ export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCa
         setNodes([...restoredNodes]);
         setGoal(typeof saved.goal === "string" ? saved.goal : "");
         setStartedAt(typeof saved.startedAt === "number" ? saved.startedAt : null);
-        setPaymentMode(saved.paymentMode === "public" ? "public" : "confidential");
         setAnnouncement(restoredNodes.length > 0 ? "Restored this tab's execution graph" : "AI Agent ready");
       }
     } catch {
@@ -124,18 +114,12 @@ export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCa
       sessionStorage.removeItem(key);
       return;
     }
-    sessionStorage.setItem(key, JSON.stringify({ nodes, goal, startedAt, paymentMode } satisfies StoredGraphState));
-  }, [goal, nodes, paymentMode, persistenceKey, restored, startedAt]);
+    sessionStorage.setItem(key, JSON.stringify({ nodes, goal, startedAt } satisfies StoredGraphState));
+  }, [goal, nodes, persistenceKey, restored, startedAt]);
 
   useEffect(() => {
     followRef.current = follow;
   }, [follow]);
-
-  // Read from a ref inside growGraph so a mid-run toggle cannot retarget a
-  // payment the owner already set in motion.
-  useEffect(() => {
-    paymentModeRef.current = paymentMode;
-  }, [paymentMode]);
 
   useEffect(() => {
     if (composerOpen) textareaRef.current?.focus();
@@ -254,19 +238,14 @@ export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCa
           for (const child of children) {
             if (child.toolCall) {
               if (created >= MAX_NODES_PER_RUN) break;
-              /*
-                The owner's payment mode is stamped here, overwriting whatever
-                the model asked for. Whether an amount is published is an
-                authority decision, not a planning one — the same reason the
-                spend limit lives in a program rather than in the prompt. A
-                prompt-injected agent must not be able to choose to publish.
-              */
+              // The connected-wallet payment rail is confidential-only. The
+              // model cannot downgrade settlement privacy through its tool input.
               const call: AgentGraphToolCallDTO = child.toolCall.name === "pay_confidentially"
                 ? {
                     name: "pay_confidentially",
                     input: {
                       amountTokens: child.toolCall.input.amountTokens,
-                      mode: paymentModeRef.current,
+                      mode: "confidential",
                     },
                   }
                 : child.toolCall;
@@ -404,32 +383,6 @@ export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCa
         </div>
         <p className="xgraph-goal">{goal ? `Goal: ${goal}` : "No goal sent yet."}</p>
         <div className="xgraph-actions">
-          {/*
-            Payment mode, not view mode. This decides what actually lands
-            on-chain, so it sits next to the other run controls rather than
-            hiding in a settings pane — and it is the owner's switch, never the
-            model's.
-          */}
-          <div className="xmode" role="group" aria-label="Payment mode">
-            <button
-              className={paymentMode === "confidential" ? "is-on" : ""}
-              onClick={() => setPaymentMode("confidential")}
-              aria-pressed={paymentMode === "confidential"}
-              disabled={running}
-            >
-              <LockKey aria-hidden="true" size={14} weight="duotone" />
-              Confidential
-            </button>
-            <button
-              className={paymentMode === "public" ? "is-on is-public" : ""}
-              onClick={() => setPaymentMode("public")}
-              aria-pressed={paymentMode === "public"}
-              disabled={running}
-            >
-              <LockKeyOpen aria-hidden="true" size={14} weight="duotone" />
-              Public
-            </button>
-          </div>
           <button
             className={ownerView ? "is-active" : ""}
             onClick={() => setOwnerView((value) => !value)}
