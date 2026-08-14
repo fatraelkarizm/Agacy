@@ -66,6 +66,17 @@ export const GRAPH_ONLY_TOOLS: Record<string, string> = {
 export async function expandAgentGraph(
   input: AgentGraphExpansionRequestDTO,
 ): Promise<AgentGraphExpansionDTO> {
+  if (input.depth === 0 && /^(?:hi+|hai+|halo+|hello+|hey+|yo+|ping|test)[!?.\s]*$/i.test(input.goal)) {
+    return {
+      children: [{
+        label: "Ready",
+        detail: "Hi. Give me a concrete goal and I will only use tools that goal actually requires.",
+        kind: "complete",
+        expand: false,
+      }],
+    };
+  }
+
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) throw new Error("LLM_API_KEY is not configured");
 
@@ -85,7 +96,8 @@ export async function expandAgentGraph(
       system: [
         "You expand one node in a generic autonomous-agent execution graph.",
         "Break the current node into the smallest useful next observations, reasoning steps, tool calls, policy checks, or results.",
-        "Return 2-4 children. At most two children may have expand=true.",
+        "Return 1-4 children. At most two children may have expand=true.",
+        "For greetings, acknowledgements, or other non-actionable conversation, return exactly one complete child and use no tools.",
         finalDepth
           ? "This is the final depth. Every child must have expand=false and end as complete, blocked, or a factual result."
           : "Set expand=true only when that child genuinely needs more work.",
