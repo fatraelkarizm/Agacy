@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agacy — NTU InnovateX 2026 Submission</title>
+  <style>
+    :root {
+      --bg: #070713;
+      --panel: #100e20;
+      --panel-2: #15122a;
+      --line: #30294f;
+      --text: #f6f3ff;
+      --muted: #aca5c8;
+      --violet: #8668ff;
+      --violet-soft: #b6a6ff;
+      --green: #42e3a2;
+      --orange: #f97316;
+      --red: #ff5c7c;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; background: #020207; color: var(--text); font-family: "Segoe UI", Arial, sans-serif; }
+    body { overflow-x: hidden; }
+    a { color: var(--violet-soft); text-decoration: none; }
+    code { font-family: Consolas, "Courier New", monospace; }
+
+    .deck { width: 100%; }
+    .slide {
+      position: relative;
+      width: 1280px;
+      height: 720px;
+      margin: 24px auto;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 82% 18%, rgba(124, 92, 252, .14), transparent 30%),
+        linear-gradient(135deg, #080714 0%, #070713 58%, #0c0920 100%);
+      border: 1px solid #221d38;
+      break-after: page;
+      page-break-after: always;
+    }
+
+    .slide::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .2;
+      background-image: radial-gradient(#7664bb 0.7px, transparent 0.7px);
+      background-size: 20px 20px;
+      mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 82%, transparent);
+    }
+
+    .inner { position: relative; z-index: 2; height: 100%; padding: 54px 64px 48px; }
+    .eyebrow { color: var(--violet-soft); font-size: 13px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+    .eyebrow.orange { color: var(--orange); }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { max-width: 760px; margin-bottom: 22px; font-size: 66px; line-height: .98; letter-spacing: -.045em; }
+    h2 { margin: 9px 0 30px; font-size: 42px; line-height: 1.06; letter-spacing: -.035em; }
+    h3 { margin-bottom: 9px; font-size: 20px; }
+    p { color: var(--muted); font-size: 20px; line-height: 1.48; }
+    .lead { max-width: 770px; font-size: 25px; color: #d8d3ea; }
+    .accent { color: var(--green); }
+    .violet { color: var(--violet-soft); }
+    .orange { color: var(--orange); }
+    .red { color: var(--red); }
+
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 68px; font-size: 24px; font-weight: 750; }
+    .mark { position: relative; width: 34px; height: 34px; overflow: hidden; border-radius: 9px; background: linear-gradient(135deg, #a58eff 0 49%, #7654ef 50%); }
+    .mark::after { content: ""; position: absolute; width: 42px; height: 10px; left: -4px; top: 12px; background: #17132c; transform: rotate(-45deg); }
+
+    .footer { position: absolute; z-index: 3; left: 64px; right: 64px; bottom: 26px; display: flex; justify-content: space-between; color: #77708f; font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+    .tags { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 28px; }
+    .tag { padding: 9px 13px; border: 1px solid var(--line); border-radius: 999px; color: #cbc5df; background: rgba(17, 15, 35, .75); font-size: 13px; font-weight: 650; }
+    .tag.green { border-color: rgba(66, 227, 162, .35); color: var(--green); }
+    .tag.orange { border-color: rgba(249, 115, 22, .45); color: #ff9b52; }
+
+    .hero-art { position: absolute; z-index: 1; inset: 0 0 0 39%; width: 61%; height: 100%; object-fit: cover; opacity: .92; }
+    .hero-wash { position: absolute; z-index: 1; inset: 0; background: linear-gradient(90deg, #070713 0%, rgba(7,7,19,.94) 31%, rgba(7,7,19,.32) 63%, rgba(7,7,19,.1)); }
+    .hero .inner { width: 64%; }
+    .hero h1 { max-width: 690px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; }
+    .card { min-height: 180px; padding: 25px; border: 1px solid var(--line); border-radius: 18px; background: linear-gradient(145deg, rgba(21,18,42,.92), rgba(12,11,27,.9)); }
+    .card p { margin-bottom: 0; font-size: 17px; }
+    .card.green { border-top: 3px solid var(--green); }
+    .card.violet { border-top: 3px solid var(--violet); }
+    .card.orange { border-top: 3px solid var(--orange); }
+    .card.red { border-top: 3px solid var(--red); }
+    .number { display: block; margin-bottom: 13px; color: var(--violet-soft); font: 700 15px Consolas, monospace; }
+
+    .statement { margin-top: 24px; padding: 20px 24px; border-left: 4px solid var(--green); color: #eeeaff; background: rgba(66, 227, 162, .06); font-size: 23px; font-weight: 650; }
+
+    .flow { display: grid; grid-template-columns: repeat(5, 1fr); gap: 30px; align-items: center; margin-top: 74px; }
+    .flow-item { position: relative; min-height: 145px; padding: 22px 16px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); text-align: center; }
+    .flow-item:not(:last-child)::after { content: "→"; position: absolute; right: -26px; top: 53px; color: var(--violet-soft); font-size: 28px; }
+    .flow-icon { display: grid; place-items: center; width: 42px; height: 42px; margin: 0 auto 16px; border-radius: 12px; background: rgba(134,104,255,.15); color: var(--violet-soft); font: 700 17px Consolas, monospace; }
+    .flow-item.green .flow-icon { color: var(--green); background: rgba(66,227,162,.12); }
+    .flow-item.orange .flow-icon { color: var(--orange); background: rgba(249,115,22,.12); }
+    .flow-item h3 { font-size: 17px; }
+    .flow-item p { font-size: 14px; line-height: 1.35; }
+
+    .architecture { display: grid; grid-template-columns: 1.05fr .95fr 1.15fr; gap: 48px; align-items: center; margin-top: 34px; }
+    .arch-col { display: grid; gap: 14px; }
+    .arch-box { position: relative; padding: 18px 20px; border: 1px solid var(--line); border-radius: 14px; background: rgba(16,14,32,.94); }
+    .arch-box h3 { margin: 0 0 5px; font-size: 17px; }
+    .arch-box p { margin: 0; font-size: 13px; }
+    .arch-box.orange { border-color: rgba(249,115,22,.5); }
+    .arch-box.green { border-color: rgba(66,227,162,.5); }
+    .arch-center { position: relative; padding: 26px; border: 1px solid rgba(134,104,255,.55); border-radius: 22px; background: radial-gradient(circle at 50% 50%, rgba(134,104,255,.15), rgba(16,14,32,.95) 66%); text-align: center; }
+    .arch-center::before, .arch-center::after { content: ""; position: absolute; top: 50%; width: 49px; height: 2px; background: var(--violet); }
+    .arch-center::before { left: -49px; }
+    .arch-center::after { right: -49px; }
+    .arch-center h3 { font-size: 23px; }
+    .arch-center p { font-size: 15px; }
+
+    .screenshot-frame { overflow: hidden; border: 1px solid #3b3261; border-radius: 18px; background: #080713; box-shadow: 0 28px 80px rgba(0,0,0,.38); }
+    .screenshot-frame img { display: block; width: 100%; }
+    .shot-layout { display: grid; grid-template-columns: 1.75fr .75fr; gap: 25px; align-items: center; }
+    .checks { display: grid; gap: 12px; }
+    .check { display: flex; gap: 11px; align-items: flex-start; color: #d8d3e8; font-size: 16px; line-height: 1.35; }
+    .check::before { content: "✓"; flex: 0 0 auto; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: #07130e; background: var(--green); font-size: 13px; font-weight: 900; }
+
+    .privacy-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+    .privacy-table th { padding: 0 18px 8px; color: #8e87a8; font-size: 12px; letter-spacing: .12em; text-align: left; text-transform: uppercase; }
+    .privacy-table td { padding: 15px 18px; background: rgba(16,14,32,.95); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 16px; }
+    .privacy-table td:first-child { border-left: 1px solid var(--line); border-radius: 12px 0 0 12px; font-weight: 650; }
+    .privacy-table td:last-child { border-right: 1px solid var(--line); border-radius: 0 12px 12px 0; color: var(--muted); }
+    .status-hidden { color: var(--green); font-weight: 750; }
+    .status-public { color: var(--red); font-weight: 750; }
+    .status-local { color: var(--violet-soft); font-weight: 750; }
+
+    .aisa-flow { display: grid; grid-template-columns: 1fr 210px 1fr; gap: 32px; align-items: center; margin-top: 35px; }
+    .aisa-core { display: grid; place-items: center; width: 190px; height: 190px; margin: auto; border: 1px solid rgba(249,115,22,.6); border-radius: 50%; background: radial-gradient(circle, rgba(249,115,22,.22), rgba(42,22,13,.9) 60%, #0d0b18 61%); text-align: center; }
+    .aisa-core strong { display: block; color: #ff9b52; font-size: 27px; }
+    .aisa-core span { color: #c9a88f; font-size: 12px; }
+    .aisa-card { min-height: 155px; padding: 22px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+    .aisa-card h3 { color: #ff9b52; }
+    .aisa-card p { font-size: 15px; }
+
+    .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin: 8px 0 30px; }
+    .metric { padding: 19px; border: 1px solid var(--line); border-radius: 15px; background: var(--panel); }
+    .metric strong { display: block; margin-bottom: 6px; color: var(--green); font-size: 31px; }
+    .metric span { color: var(--muted); font-size: 13px; }
+    .evidence-links { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .evidence { padding: 16px 18px; border: 1px solid var(--line); border-radius: 13px; background: rgba(16,14,32,.9); }
+    .evidence strong { display: block; margin-bottom: 5px; font-size: 15px; }
+    .evidence code { color: var(--violet-soft); font-size: 12px; }
+
+    .persona { min-height: 145px; }
+    .persona strong { display: block; margin-bottom: 9px; color: var(--violet-soft); font-size: 18px; }
+    .persona p { font-size: 14px; }
+
+    .roadmap { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 38px; }
+    .roadmap .card { min-height: 220px; }
+    .roadmap ul { margin: 14px 0 0; padding-left: 18px; color: var(--muted); font-size: 15px; line-height: 1.7; }
+
+    .team-card { width: 58%; margin-top: 35px; padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); }
+    .team-card strong { display: block; font-size: 25px; }
+    .team-card span { display: block; margin-top: 8px; color: var(--muted); font-size: 17px; }
+    .warning { margin-top: 25px; padding: 20px 22px; border: 1px solid rgba(255,92,124,.55); border-radius: 14px; background: rgba(255,92,124,.07); color: #ffd7df; font-size: 17px; }
+
+    @media print {
+      @page { size: 13.333in 7.5in; margin: 0; }
+      html, body { width: 13.333in; margin: 0; background: var(--bg); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .slide { width: 13.333in; height: 7.5in; margin: 0; border: 0; }
+    }
+  </style>
+</head>
+<body>
+<main class="deck">
+  <section class="slide hero">
+    <img class="hero-art" src="assets/agacy-hero-art.png" alt="Abstract agent graph passing through a protected policy boundary">
+    <div class="hero-wash"></div>
+    <div class="inner">
+      <div class="brand"><span class="mark"></span>Agacy</div>
+      <div class="eyebrow">NTU InnovateX 2026 · Track 2</div>
+      <h1>Private execution for autonomous agents on Solana.</h1>
+      <p class="lead">Give an AI agent a goal—not unrestricted access to your wallet.</p>
+      <div class="tags">
+        <span class="tag green">Solana Devnet</span>
+        <span class="tag">Token-2022</span>
+        <span class="tag orange">AISA Integration</span>
+        <span class="tag">Student Group</span>
+      </div>
+    </div>
+    <div class="footer"><span>Agacy · Agentic Privacy</span><span>01</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">The problem</div>
+      <h2>Agent autonomy currently comes with two unsafe defaults.</h2>
+      <div class="grid-2">
+        <article class="card red">
+          <span class="number">01 / PUBLIC BY DEFAULT</span>
+          <h3>Every payment becomes permanent intelligence.</h3>
+          <p>Balances, payment amounts, supplier pricing, operating cadence, and treasury runway can be profiled once an agent wallet is linked to its owner.</p>
+        </article>
+        <article class="card red">
+          <span class="number">02 / PROMPT AS POLICY</span>
+          <h3>“Do not overspend” is guidance, not authority.</h3>
+          <p>A prompt-injected or malfunctioning model can ignore a textual limit when the same agent still controls an unrestricted signing path.</p>
+        </article>
+      </div>
+      <div class="statement">Owners should be able to delegate an outcome without publishing their finances or surrendering root control.</div>
+    </div>
+    <div class="footer"><span>Problem · Privacy and authority</span><span>02</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">The solution</div>
+      <h2>Agacy separates intelligence from authority.</h2>
+      <div class="grid-3">
+        <article class="card violet">
+          <span class="number">AI AGENT</span>
+          <h3>Plans the work</h3>
+          <p>Turns a natural-language goal into observations, verified tools, decisions, clarification, and honest refusal.</p>
+        </article>
+        <article class="card violet">
+          <span class="number">POLICY LAYER</span>
+          <h3>Controls what may happen</h3>
+          <p>Payment details must match the owner’s goal, imported vendor profile, custody path, and spending authorization.</p>
+        </article>
+        <article class="card green">
+          <span class="number">CONFIDENTIAL SETTLEMENT</span>
+          <h3>Protects financial values</h3>
+          <p>Token-2022 Confidential Transfer encrypts the payment amount and confidential token balances on Solana.</p>
+        </article>
+      </div>
+      <div class="statement">The model decides what to do. The policy decides what it is allowed to do.</div>
+    </div>
+    <div class="footer"><span>Solution · Bounded autonomy</span><span>03</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Product flow</div>
+      <h2>One owner goal becomes a verified payment workflow.</h2>
+      <div class="flow">
+        <article class="flow-item"><div class="flow-icon">01</div><h3>Create agent</h3><p>Connect wallet and define purpose and spending rules.</p></article>
+        <article class="flow-item"><div class="flow-icon">02</div><h3>Onboard vendor</h3><p>Vendor provisions a confidential account for the exact mint.</p></article>
+        <article class="flow-item orange"><div class="flow-icon">03</div><h3>Run goal</h3><p>Agent plans and may verify external facts through AISA.</p></article>
+        <article class="flow-item"><div class="flow-icon">04</div><h3>Enforce policy</h3><p>Amount, recipient, profile, and authority are checked.</p></article>
+        <article class="flow-item green"><div class="flow-icon">05</div><h3>Settle privately</h3><p>Owner receives proof, fee accounting, and resulting balance.</p></article>
+      </div>
+    </div>
+    <div class="footer"><span>Flow · Owner to verified settlement</span><span>04</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">High-level architecture</div>
+      <h2>Agent intelligence, external data, and value authority stay separate.</h2>
+      <div class="architecture">
+        <div class="arch-col">
+          <div class="arch-box"><h3>Owner and vendor wallets</h3><p>Root ownership, wallet signatures, vendor provisioning, and recovery.</p></div>
+          <div class="arch-box"><h3>Agacy application</h3><p>Next.js dashboard, Agent Graph, public view, owner audit, and privacy proof.</p></div>
+        </div>
+        <div class="arch-center">
+          <div class="eyebrow">Execution boundary</div>
+          <h3>AI Agent</h3>
+          <p>Goal planning and restricted tools</p>
+          <div class="arch-box orange" style="margin-top:18px"><h3>AISA</h3><p>Market data and external research</p></div>
+          <div class="arch-box" style="margin-top:12px"><h3>Privacy and policy</h3><p>Validate before value moves</p></div>
+        </div>
+        <div class="arch-col">
+          <div class="arch-box"><h3>Agacy Policy Program</h3><p>PDA-controlled authorization and custody path on Solana devnet.</p></div>
+          <div class="arch-box green"><h3>Token-2022 Confidential Transfer</h3><p>Encrypted amounts, confidential balances, and on-chain ZK verification.</p></div>
+          <div class="arch-box"><h3>Public and authorized DTOs</h3><p>Different data contracts for observers and the owner.</p></div>
+        </div>
+      </div>
+    </div>
+    <div class="footer"><span>Architecture · Helicopter view</span><span>05</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Working prototype</div>
+      <h2>A live execution graph—not a decorative blockchain diagram.</h2>
+      <div class="shot-layout">
+        <div class="screenshot-frame"><img src="assets/agent-graph-aisa.png" alt="Agacy Agent Graph showing verified AISA tool calls"></div>
+        <div class="checks">
+          <div class="check">Goal-driven node expansion</div>
+          <div class="check">Verified tool-result nodes</div>
+          <div class="check">AISA attribution and call metrics</div>
+          <div class="check">Public and owner views</div>
+          <div class="check">Clarification and refusal states</div>
+        </div>
+      </div>
+    </div>
+    <div class="footer"><span>Prototype · Agent Graph</span><span>06</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Honest privacy boundary</div>
+      <h2>Confidential does not mean untraceable.</h2>
+      <table class="privacy-table">
+        <thead><tr><th>Data</th><th>Current protection</th><th>What a public observer learns</th></tr></thead>
+        <tbody>
+          <tr><td>Transfer amount</td><td class="status-hidden">Encrypted on-chain</td><td>Plaintext amount is absent from recipient account bytes.</td></tr>
+          <tr><td>Confidential token balance</td><td class="status-hidden">Encrypted on-chain</td><td>Balance remains ciphertext without the authorized key.</td></tr>
+          <tr><td>Public application view</td><td class="status-local">Structurally redacted</td><td>Public DTO contains no goal, amount, balance, or owner-only reasoning.</td></tr>
+          <tr><td>Transaction metadata</td><td class="status-public">Still public</td><td>Existence, accounts, mint, timing, fees, and program interaction remain visible.</td></tr>
+          <tr><td>Browser policy limits</td><td class="status-public">Currently public</td><td>Encrypted-limit verification exists separately; it is not the primary browser flow yet.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="footer"><span>Privacy · Claim only what is proven</span><span>07</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow orange">AISA integration</div>
+      <h2>External intelligence before consequential actions.</h2>
+      <div class="aisa-flow">
+        <article class="aisa-card">
+          <h3>Market-data cross-check</h3>
+          <p>Compares an AISA/CoinGecko reference with an independent Solana market source before the agent relies on a price.</p>
+        </article>
+        <div class="aisa-core"><div><strong>AISA</strong><span>AI AND DATA INFRASTRUCTURE</span></div></div>
+        <article class="aisa-card">
+          <h3>Counterparty research</h3>
+          <p>Uses AISA/Tavily to find outages, exploits, depegs, or other external conditions that chain state cannot answer.</p>
+        </article>
+      </div>
+      <div class="statement" style="border-left-color:var(--orange)">AISA credentials stay behind server-side proxy routes. Every completed sponsor call is visibly attributed in the graph.</div>
+    </div>
+    <div class="footer"><span>AISA · Sponsor infrastructure in the run</span><span>08</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Technical evidence</div>
+      <h2>Working devnet proof, backed by reproducible tests.</h2>
+      <div class="metrics">
+        <div class="metric"><strong>259</strong><span>automated tests passing</span></div>
+        <div class="metric"><strong>Real</strong><span>owner-funded devnet treasury</span></div>
+        <div class="metric"><strong>Absent</strong><span>plaintext amount in raw account bytes</span></div>
+        <div class="metric"><strong>Typed</strong><span>public versus authorized boundary</span></div>
+      </div>
+      <div class="evidence-links">
+        <div class="evidence"><strong>Open-source repository</strong><code>github.com/fatraelkarizm/Agacy</code></div>
+        <div class="evidence"><strong>Deployed policy program</strong><code>9sYKkYh1GTKY…HtwW · Solana devnet</code></div>
+        <div class="evidence"><strong>Confidential transfer proof</strong><code>5vTuKeoULGc…QqAEtz · Solana devnet</code></div>
+        <div class="evidence"><strong>Security verification</strong><code>custody · limits · mismatch · recovery</code></div>
+      </div>
+      <div class="tags">
+        <span class="tag">@solana/kit</span><span class="tag">Token-2022</span><span class="tag">ZK ElGamal</span><span class="tag">Rust</span><span class="tag">Next.js</span><span class="tag">TypeScript</span><span class="tag">Vitest</span>
+      </div>
+    </div>
+    <div class="footer"><span>Proof · Reproducible, not asserted</span><span>09</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Real-world adoption</div>
+      <h2>Privacy turns agent payments into usable financial infrastructure.</h2>
+      <div class="grid-4">
+        <article class="card persona"><strong>Individuals</strong><p>Subscriptions, data purchases, and personal automation without publishing a financial profile.</p></article>
+        <article class="card persona"><strong>Startups and SMEs</strong><p>SaaS, API, compute, and supplier payments without exposing private pricing.</p></article>
+        <article class="card persona"><strong>DAO treasuries</strong><p>Contributor payouts and grants with bounded automation and owner recovery.</p></article>
+        <article class="card persona"><strong>Agent platforms</strong><p>A reusable authority and privacy layer for autonomous on-chain workflows.</p></article>
+      </div>
+      <div class="statement">Privacy is not a security gimmick. It lowers the trust cost of moving real workflows on-chain.</div>
+    </div>
+    <div class="footer"><span>Impact · Trust enables adoption</span><span>10</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">What comes next</div>
+      <h2>Move from a strong prototype to a production privacy boundary.</h2>
+      <div class="roadmap">
+        <article class="card violet">
+          <span class="number">NOW</span><h3>Functional prototype</h3>
+          <ul><li>Real confidential devnet payments</li><li>Agent Graph and AISA tools</li><li>Policy-controlled custody path</li><li>Public and owner views</li></ul>
+        </article>
+        <article class="card orange">
+          <span class="number">NEXT</span><h3>Production readiness</h3>
+          <ul><li>Primary browser encrypted-limit flow</li><li>Production RPC and deployment</li><li>Lower proof latency</li><li>Named user pilots</li></ul>
+        </article>
+        <article class="card green">
+          <span class="number">VISION</span><h3>Private agent infrastructure</h3>
+          <ul><li>Reusable wallet-level capability layer</li><li>Shielded ownership and execution</li><li>Scoped auditor access</li><li>Multiple agent frameworks</li></ul>
+        </article>
+      </div>
+    </div>
+    <div class="footer"><span>Roadmap · From confidentiality to shielded execution</span><span>11</span></div>
+  </section>
+
+  <section class="slide">
+    <div class="inner">
+      <div class="eyebrow">Team and appendix</div>
+      <h2>Agacy — Student Group submission.</h2>
+      <div class="team-card">
+        <strong>Fatra Al Khawarizmi</strong>
+        <span>Student builder · Affiliation must be inserted before submission</span>
+        <div class="tags"><span class="tag">Product</span><span class="tag">AI Agents</span><span class="tag">Solana</span><span class="tag">Privacy Engineering</span></div>
+      </div>
+      <div class="warning"><strong>Required before upload:</strong> append valid proof of current student status showing the student’s name, institution, and active enrolment. Redact non-essential sensitive information.</div>
+      <p style="margin-top:22px;font-size:16px">Repository: <a href="https://github.com/fatraelkarizm/Agacy">github.com/fatraelkarizm/Agacy</a></p>
+    </div>
+    <div class="footer"><span>Submission draft · Student proof pending</span><span>12</span></div>
+  </section>
+</main>
+</body>
+</html>
