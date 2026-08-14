@@ -7,6 +7,7 @@
 Give an AI agent a goal—not unrestricted access to your wallet.
 
 [![NTU InnovateX 2026](https://img.shields.io/badge/NTU_InnovateX_2026-Track_2-7C5CFC?style=for-the-badge)](https://ntu-cctf-snz-innovatex-2026.devpost.com/)
+[![AISA](https://img.shields.io/badge/AISA-AI_Infrastructure-F97316?style=for-the-badge&logoColor=white)](https://aisa.one)
 [![Solana Devnet](https://img.shields.io/badge/Solana-Devnet-14F195?style=for-the-badge&logo=solana&logoColor=black)](https://explorer.solana.com/?cluster=devnet)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)
