@@ -1760,7 +1760,7 @@ button.primary:hover:not(:disabled) {
 .xprivacy-trace ol { display: flex; align-items: center; justify-content: center; min-width: 0; list-style: none; }
 .xprivacy-trace li { display: inline-flex; align-items: center; gap: 4px; color: var(--text-dim); font-family: var(--mono); font-size: 0.61rem; white-space: nowrap; }
 .xprivacy-trace li + li::before { content: "→"; margin: 0 8px; color: rgba(74, 222, 155, 0.5); }
-.xprivacy-trace.is-verified li svg { color: var(--private); }
+.xprivacy-trace li.is-passed svg { color: var(--private); }
 .xprivacy-trace.is-running { border-color: var(--border-bright); }
 .xprivacy-trace.is-running li svg { animation: xpulse 0.9s ease-in-out infinite; color: var(--violet-bright); }
 .xprivacy-trace.is-failed { border-color: rgba(255, 92, 122, 0.3); background: var(--exposed-dim); }
@@ -1773,6 +1773,17 @@ button.primary:hover:not(:disabled) {
   font-size: 0.65rem;
   white-space: nowrap;
 }
+
+.xprivacy-policy-linkage {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-faint);
+}
+.xprivacy-policy-linkage > span { display: grid; }
+.xprivacy-policy-linkage strong { color: var(--text-dim); font-size: 0.62rem; }
+.xprivacy-policy-linkage small { font-size: 0.58rem; }
 
 @media (max-width: 960px) {
   .xprivacy-trace { grid-template-columns: 1fr auto; }

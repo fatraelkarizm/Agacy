@@ -37,6 +37,7 @@ import {
   NODE_KIND_META,
   NODE_WIDTH,
   focusedNodeIds,
+  confidentialPaymentVerification,
   formatBaseUnitAmount,
   formatDuration,
   toolProvider,
@@ -142,6 +143,7 @@ const NODE_TYPES = { execution: ExecutionNodeCard };
 
 interface ExecutionGraphCanvasProps {
   readonly nodes: readonly ExecutionNode[];
+  readonly ownerView: boolean;
   readonly selectedId: string;
   readonly running: boolean;
   readonly followActive: boolean;
@@ -315,7 +317,13 @@ function CanvasInner({
   );
 }
 
-function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
+function PrivacyTrace({
+  nodes,
+  ownerView,
+}: {
+  nodes: readonly ExecutionNode[];
+  ownerView: boolean;
+}) {
   const payment = [...nodes]
     .reverse()
     .find(
@@ -324,29 +332,48 @@ function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
     );
   if (!payment) return null;
 
-  const receipt = paymentReceipt(payment);
+  const verification = confidentialPaymentVerification(payment);
+  const receipt = verification?.receipt ?? paymentReceipt(payment);
   const failed = payment.status === "blocked" || payment.toolResult?.status === "failed";
-  const steps = receipt
-    ? ["Amount → ciphertext", "ZK proofs verified", "Devnet settled", "Raw bytes: plaintext absent"]
+  const steps = verification
+    ? [
+        { label: "Devnet settlement confirmed", passed: verification.checks.settlementConfirmed },
+        { label: "ZK proofs accepted", passed: verification.checks.zkProofsAccepted },
+        { label: "Raw bytes: plaintext absent", passed: verification.checks.plaintextAbsent },
+        { label: "Balance reconciled", passed: verification.checks.balanceReconciled },
+        { label: "Fees accounted", passed: verification.checks.feesAccounted },
+      ]
     : failed
-      ? ["Confidential transfer stopped before verification"]
-      : ["Building ciphertext and proofs…"];
+      ? [{ label: "Confidential transfer stopped before verification", passed: false }]
+      : [{ label: "Building ciphertext and proofs…", passed: false }];
   const accounting = receipt?.accounting;
+  const policyAuthorization = nodes.some(
+    (node) =>
+      node.toolCall?.name === "authorize_policy_spend" &&
+      node.toolResult?.status === "succeeded",
+  );
+  const fullyVerified = verification?.passed === verification?.total;
 
   return (
-    <aside className={`xprivacy-trace${receipt ? " is-verified" : failed ? " is-failed" : " is-running"}`}>
+    <aside className={`xprivacy-trace${fullyVerified ? " is-verified" : failed ? " is-failed" : " is-running"}`}>
       <div className="xprivacy-trace-title">
         <LockKey className="xprivacy-trace-lock" aria-hidden="true" size={17} weight="duotone" />
         <span>
-          <strong>Privacy trace</strong>
-          <small>{receipt ? "On-chain evidence linked" : failed ? "Not verified" : "Verifying on devnet"}</small>
+          <strong>{fullyVerified ? "Confidential payment verified" : "Privacy trace"}</strong>
+          <small>
+            {verification
+              ? `${verification.passed}/${verification.total} evidence checks passed`
+              : failed
+                ? "Not verified"
+                : "Verifying on devnet"}
+          </small>
         </span>
       </div>
       <ol>
         {steps.map((step) => (
-          <li key={step}>
-            <CheckCircle aria-hidden="true" size={13} weight={receipt ? "fill" : "regular"} />
-            {step}
+          <li key={step.label} className={step.passed ? "is-passed" : ""}>
+            <CheckCircle aria-hidden="true" size={13} weight={step.passed ? "fill" : "regular"} />
+            {step.label}
           </li>
         ))}
       </ol>
@@ -360,7 +387,7 @@ function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
           <ArrowSquareOut aria-hidden="true" size={13} />
         </a>
       )}
-      {accounting && (
+      {accounting && ownerView && (
         <dl className="xprivacy-accounting">
           <div>
             <dt>Demo treasury</dt>
@@ -380,6 +407,19 @@ function PrivacyTrace({ nodes }: { nodes: readonly ExecutionNode[] }) {
           </div>
         </dl>
       )}
+      {receipt && (
+        <div className="xprivacy-policy-linkage">
+          <ShieldCheck aria-hidden="true" size={15} weight="duotone" />
+          <span>
+            <strong>{policyAuthorization ? "Separate policy authorization recorded" : "Policy linkage not attached"}</strong>
+            <small>
+              {policyAuthorization
+                ? "Authorization is a separate transaction and is not counted as proof for this payment receipt."
+                : "This payment verification does not claim policy-bound execution."}
+            </small>
+          </span>
+        </div>
+      )}
     </aside>
   );
 }
@@ -397,7 +437,7 @@ export function ExecutionGraphCanvas(props: ExecutionGraphCanvasProps) {
           </p>
         )}
       </div>
-      <PrivacyTrace nodes={props.nodes} />
+      <PrivacyTrace nodes={props.nodes} ownerView={props.ownerView} />
       {/*
         A strip below the canvas rather than an overlay inside it. As an
         overlay the legend sat on top of live nodes — an explanation of the

@@ -493,6 +493,7 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
           ) : (
             <ExecutionGraphCanvas
               nodes={nodes}
+              ownerView={ownerView}
               selectedId={selectedId ?? ""}
               running={running}
               followActive={follow}

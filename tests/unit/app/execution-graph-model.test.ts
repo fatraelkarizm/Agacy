@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   formatBaseUnitAmount,
+  confidentialPaymentVerification,
   expandableGraphNodes,
   initialExecutionNodeStatus,
   paymentReceipt,
@@ -29,6 +30,17 @@ describe("execution graph payment accounting", () => {
     };
 
     expect(paymentReceipt({ toolResult: result })?.accounting).toEqual(result.paymentAccounting);
+    expect(confidentialPaymentVerification({ toolResult: result })).toMatchObject({
+      passed: 5,
+      total: 5,
+      checks: {
+        settlementConfirmed: true,
+        zkProofsAccepted: true,
+        plaintextAbsent: true,
+        balanceReconciled: true,
+        feesAccounted: true,
+      },
+    });
   });
 
   it("formats token and SOL base units without floating-point rounding", () => {
