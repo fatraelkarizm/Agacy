@@ -95,6 +95,27 @@ describe("agent graph conversation", () => {
     });
   });
 
+  it("plans a fully specified payment without depending on the LLM", async () => {
+    const result = await expandAgentGraph({
+      goal: `Pay this month's subscription now—send exactly 2 tokens to ${VENDOR}. I confirm the amount and recipient. Keep the payment confidential.`,
+      parent: { label: "Pay subscription", detail: "Pay subscription", kind: "agent" },
+      depth: 0,
+      lineage: ["Pay subscription"],
+      availableTools: ["pay_confidentially"],
+    });
+
+    expect(result.children).toEqual([{
+      label: "Make confidential payment",
+      detail: "Submit the confirmed 2-token payment through the imported vendor profile.",
+      kind: "tool",
+      expand: false,
+      toolCall: {
+        name: "pay_confidentially",
+        input: { amountTokens: 2 },
+      },
+    }]);
+  });
+
   it("answers Agacy privacy questions without inventing tool work", async () => {
     const result = await expandAgentGraph({
       goal: "What does Agacy encrypt?",

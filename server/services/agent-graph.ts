@@ -129,9 +129,10 @@ export async function expandAgentGraph(
   }
 
   const paymentIntent = /\b(pay|payment|send|settle|release|renew|renewal|payout|invoice)\b/i.test(input.goal);
+  const amount = input.goal.match(/\b(\d+(?:[.,]\d+)?)\s*(?:-\s*)?tokens?\b/i);
+  const amountTokens = amount ? Number(amount[1]?.replace(",", ".")) : null;
+  const recipient = findRecipientAddress(input.goal);
   if (paymentIntent && !input.completedTools?.includes("pay_confidentially")) {
-    const amount = input.goal.match(/\b(\d+(?:[.,]\d+)?)\s*(?:-\s*)?tokens?\b/i);
-    const amountTokens = amount ? Number(amount[1]?.replace(",", ".")) : null;
     if (amountTokens === null || amountTokens <= 0 || amountTokens > 5) {
       return {
         children: [{
@@ -144,7 +145,7 @@ export async function expandAgentGraph(
         }],
       };
     }
-    if (!findRecipientAddress(input.goal)) {
+    if (!recipient) {
       return {
         children: [{
           label: "Clarification needed",
@@ -170,10 +171,31 @@ export async function expandAgentGraph(
     };
   }
 
+  const relevantTools = relevantToolsForGoal(input.goal, input.availableTools);
+  if (
+    paymentIntent &&
+    amountTokens !== null &&
+    recipient &&
+    relevantTools.length === 1 &&
+    relevantTools[0] === "pay_confidentially"
+  ) {
+    return {
+      children: [{
+        label: "Make confidential payment",
+        detail: `Submit the confirmed ${amountTokens}-token payment through the imported vendor profile.`,
+        kind: "tool",
+        expand: false,
+        toolCall: {
+          name: "pay_confidentially",
+          input: { amountTokens },
+        },
+      }],
+    };
+  }
+
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) throw new Error("LLM_API_KEY is not configured");
 
-  const relevantTools = relevantToolsForGoal(input.goal, input.availableTools);
   const purpose = input.agentPurpose ?? "custom";
 
   const openai = createOpenAI({
