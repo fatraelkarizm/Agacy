@@ -1,5 +1,5 @@
 /**
- * A real Token-2022 confidential transfer, reached through this app's own
+* A real Token-2022 confidential transfer, reached through this app's own
  * server route.
  *
  * The transfer needs a funded payer and a provisioned confidential mint. The
