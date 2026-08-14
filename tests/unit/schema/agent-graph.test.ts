@@ -27,6 +27,18 @@ describe("agent graph schemas", () => {
     }).success).toBe(true);
   });
 
+  it("bounds merged tool observations before they reach the planner", () => {
+    const parsed = agentGraphExpansionRequestSchema.parse({
+      goal: "Check the wallet, policy, and provider status before paying.",
+      parent: { label: "Verified observations", detail: "x".repeat(1_200), kind: "observe" },
+      depth: 1,
+      lineage: ["Goal", "Verified observations"],
+      availableTools: ["pay_confidentially"],
+    });
+
+    expect(parsed.parent.detail).toHaveLength(500);
+  });
+
   it("rejects empty goals and excessive depth", () => {
     const request = {
       goal: "",

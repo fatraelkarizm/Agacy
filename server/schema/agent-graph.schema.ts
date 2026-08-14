@@ -70,7 +70,7 @@ export const agentGraphExpansionRequestSchema = z.object({
   agentPurpose: z.enum(["subscriptions", "trading", "procurement", "custom"]).optional(),
   parent: z.object({
     label: z.string().trim().min(1).max(80),
-    detail: z.string().trim().min(1).max(500),
+    detail: z.string().trim().min(1).max(2_000).transform((value) => value.slice(0, 500)),
     kind: z.union([agentGraphNodeKindSchema, z.literal("agent")]),
   }),
   depth: z.number().int().min(0).max(4),
