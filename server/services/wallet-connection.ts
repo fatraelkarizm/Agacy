@@ -6,6 +6,7 @@ import {
   forgetWalletProvider,
   readRememberedWalletProvider,
   rememberWalletProvider,
+  signMessageWithInjectedWallet,
   watchInjectedWalletSession,
 } from "../data/wallet-provider";
 import { createWalletTransactionSigner } from "../data/wallet-signer";
@@ -64,6 +65,13 @@ export async function disconnectOwnerWallet(provider: WalletProviderId): Promise
  */
 export function getOwnerTransactionSigner(wallet: WalletConnectionDTO): TransactionSendingSigner {
   return createWalletTransactionSigner(address(wallet.address), wallet.provider);
+}
+
+export function signOwnerMessage(
+  wallet: WalletConnectionDTO,
+  message: Uint8Array,
+): Promise<Uint8Array> {
+  return signMessageWithInjectedWallet(wallet.provider, message);
 }
 
 export function watchOwnerWalletSession(

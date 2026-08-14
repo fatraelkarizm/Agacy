@@ -10,6 +10,7 @@ import {
   signTransactionMessageWithSigners,
   type Address,
   type KeyPairSigner,
+  type TransactionSigner,
   some,
   none,
 } from "@solana/kit";
@@ -22,6 +23,7 @@ import {
   getMintSize,
 } from "@solana-program/token-2022";
 import type { SolanaClient } from "./solana-client.js";
+import { sendInstructionsWithSigner } from "./solana-client.js";
 
 /**
  * Creating a mint that supports confidential transfers.
@@ -103,6 +105,45 @@ export async function createConfidentialMint(
   ];
 
   const signature = await sendInstructions(client, payer, instructions);
+  return { mint: mintSigner.address, signature };
+}
+
+/** Browser-wallet variant: the connected wallet pays and remains mint authority. */
+export async function createConfidentialMintWithSigner(
+  client: SolanaClient,
+  payer: TransactionSigner,
+  config: ConfidentialMintConfig,
+): Promise<CreatedMint> {
+  const mintSigner = await generateKeyPairSigner();
+  const auditor = config.auditorElGamalPubkey ? some(config.auditorElGamalPubkey) : none<Address>();
+  const space = BigInt(getMintSize([{
+    __kind: "ConfidentialTransferMint",
+    authority: some(config.authority),
+    autoApproveNewAccounts: config.autoApproveNewAccounts,
+    auditorElgamalPubkey: auditor,
+  }]));
+  const rent = await client.rpc.getMinimumBalanceForRentExemption(space).send();
+  const signature = await sendInstructionsWithSigner(client, payer, [
+    getCreateAccountInstruction({
+      payer,
+      newAccount: mintSigner,
+      lamports: rent,
+      space,
+      programAddress: TOKEN_2022_PROGRAM_ADDRESS,
+    }),
+    getInitializeConfidentialTransferMintInstruction({
+      mint: mintSigner.address,
+      authority: config.authority,
+      autoApproveNewAccounts: config.autoApproveNewAccounts,
+      auditorElgamalPubkey: auditor,
+    }),
+    getInitializeMint2Instruction({
+      mint: mintSigner.address,
+      decimals: config.decimals,
+      mintAuthority: payer.address,
+      freezeAuthority: null,
+    }),
+  ]);
   return { mint: mintSigner.address, signature };
 }
 

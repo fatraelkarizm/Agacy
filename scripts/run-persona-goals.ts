@@ -36,34 +36,35 @@ const AVAILABLE: AgentGraphToolName[] = [
   "pay_confidentially",
   "get_swap_quote",
 ];
+const ONBOARDED_VENDOR = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 
 const PERSONAS: readonly Persona[] = [
   {
     id: "dao-treasury",
     persona: "DAO treasury operator",
     agentPurpose: "custom",
-    goal: "Proposal AGP-27 passed and the contributor milestone was accepted. Demonstrate the approved payout by executing a 2-token confidential payment to the provisioned demo recipient. Prove the amount is hidden, and do not claim to pay the real contributor.",
+    goal: `Proposal AGP-27 passed and the contributor milestone was accepted. Execute the approved 2-token confidential payment to onboarded contributor wallet ${ONBOARDED_VENDOR}. Prove the amount is hidden.`,
     expectedTools: ["pay_confidentially"],
   },
   {
     id: "sme-procurement",
     persona: "Startup / SME procurement",
     agentPurpose: "procurement",
-    goal: "Our monthly Solana RPC vendor invoice has been approved for a privacy demonstration. Check for any recent vendor outage or security incident, then execute a 1-token confidential payment to the provisioned demo recipient. The run is not complete until that payment settles, and it must not claim to pay the real vendor.",
+    goal: `Our monthly Solana RPC vendor invoice has been approved. Check for any recent vendor outage or security incident, then execute a 1-token confidential payment to onboarded vendor wallet ${ONBOARDED_VENDOR}. The run is not complete until that payment settles.`,
     expectedTools: ["research_counterparty", "pay_confidentially"],
   },
   {
     id: "protocol-keeper",
     persona: "Web3 protocol / agent platform",
     agentPurpose: "custom",
-    goal: "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Demonstrate the approved reward by executing a 1-token confidential payment to the provisioned demo recipient. Prove the amount is hidden, and do not claim to pay the real operator.",
+    goal: `Pay onboarded operator wallet ${ONBOARDED_VENDOR} exactly 1 token confidentially for the approved keeper reward, then report the on-chain privacy verification.`,
     expectedTools: ["pay_confidentially"],
   },
   {
     id: "individual",
     persona: "Individual power user",
     agentPurpose: "subscriptions",
-    goal: "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check whether the provider has reported a recent breach or outage that should stop renewal, then execute a 1-token confidential payment to the provisioned demo recipient without claiming to pay the real provider.",
+    goal: `My monthly market-data subscription is due for renewal at its usual 1-token rate. Check whether the provider has reported a recent breach or outage that should stop renewal, then execute a 1-token confidential payment to onboarded provider wallet ${ONBOARDED_VENDOR}.`,
     expectedTools: ["research_counterparty", "pay_confidentially"],
   },
 ];

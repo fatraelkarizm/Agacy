@@ -6,6 +6,7 @@ import {
   forgetWalletProvider,
   readRememberedWalletProvider,
   rememberWalletProvider,
+  signMessageWithInjectedWallet,
   watchInjectedWalletSession,
 } from "@data/wallet-provider";
 import type {
@@ -100,5 +101,23 @@ describe("injected wallet provider", () => {
     expect(disconnect).toHaveBeenCalledOnce();
     expect(on).toHaveBeenCalledTimes(2);
     expect(off).toHaveBeenCalledTimes(2);
+  });
+
+  it("normalizes Phantom and Solflare message-signature response shapes", async () => {
+    const signature = new Uint8Array(64).fill(7);
+    const phantom = registry();
+    phantom.phantom!.solana!.signMessage = vi.fn(async () => ({ signature }));
+    await expect(signMessageWithInjectedWallet("phantom", new Uint8Array([1]), phantom))
+      .resolves.toEqual(signature);
+
+    const solflare: InjectedWalletRegistry = {
+      solflare: {
+        isSolflare: true,
+        connect: vi.fn(async () => undefined),
+        signMessage: vi.fn(async () => signature),
+      },
+    };
+    await expect(signMessageWithInjectedWallet("solflare", new Uint8Array([1]), solflare))
+      .resolves.toEqual(signature);
   });
 });

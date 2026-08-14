@@ -1,4 +1,4 @@
-import { generateKeyPairSigner, type Address, type KeyPairSigner } from "@solana/kit";
+import { generateKeyPairSigner, type Address, type KeyPairSigner, type TransactionSigner } from "@solana/kit";
 import {
   getApplyConfidentialPendingBalanceInstruction,
   getConfidentialDepositInstruction,
@@ -13,6 +13,7 @@ import {
   closeContextStateProof,
 } from "@solana-program/zk-elgamal-proof";
 import type { SolanaClient } from "./solana-client.js";
+import { sendInstructionsWithSigner } from "./solana-client.js";
 import { sendInstructions } from "./confidential-mint.js";
 import type { ConfidentialKeys } from "./confidential-keys.js";
 import { generateTransferProofs } from "./confidential-proofs.js";
@@ -112,6 +113,46 @@ export async function applyPendingBalance(
   params: ApplyPendingParams,
 ): Promise<string> {
   return sendInstructions(client, payer, [
+    getApplyConfidentialPendingBalanceInstruction({
+      token: params.tokenAccount,
+      authority: params.owner,
+      expectedPendingBalanceCreditCounter: params.expectedPendingCreditCounter,
+      newDecryptableAvailableBalance: params.keys.ae
+        .encrypt(params.newAvailableBalance)
+        .toBytes() as never,
+    }),
+  ]);
+}
+
+export async function depositToConfidentialBalanceWithSigner(
+  client: SolanaClient,
+  payer: TransactionSigner,
+  mintAuthority: TransactionSigner,
+  params: Omit<DepositParams, "owner"> & { readonly owner: TransactionSigner },
+): Promise<string> {
+  return sendInstructionsWithSigner(client, payer, [
+    getMintToInstruction({
+      mint: params.mint,
+      token: params.tokenAccount,
+      mintAuthority,
+      amount: params.amount,
+    }),
+    getConfidentialDepositInstruction({
+      token: params.tokenAccount,
+      mint: params.mint,
+      authority: params.owner,
+      amount: params.amount,
+      decimals: params.decimals,
+    }),
+  ]);
+}
+
+export async function applyPendingBalanceWithSigner(
+  client: SolanaClient,
+  payer: TransactionSigner,
+  params: Omit<ApplyPendingParams, "owner"> & { readonly owner: TransactionSigner },
+): Promise<string> {
+  return sendInstructionsWithSigner(client, payer, [
     getApplyConfidentialPendingBalanceInstruction({
       token: params.tokenAccount,
       authority: params.owner,

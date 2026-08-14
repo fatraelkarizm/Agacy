@@ -33,6 +33,8 @@ function session(ownerAddress: string): DashboardSessionDTO {
     policy: null,
     executed: [],
     provisionedPolicy: null,
+    realTreasury: null,
+    vendorProfile: null,
   };
 }
 

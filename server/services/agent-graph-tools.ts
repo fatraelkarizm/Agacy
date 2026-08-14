@@ -5,7 +5,11 @@ import type {
   AgentGraphToolCallDTO,
   AuthorizedAgentGraphToolResultDTO,
 } from "../dto/agent-graph.dto";
-import { createGraphActions, type UnusedAgent } from "../../agent/graph-actions";
+import {
+  createGraphActions,
+  type GraphActionContext,
+  type UnusedAgent,
+} from "../../agent/graph-actions";
 
 /**
  * Executes one tool call from the Agent Graph.
@@ -26,6 +30,8 @@ export interface ExecuteAgentGraphToolParams {
   readonly policyAccount: string | null;
   readonly agentSigner: TransactionSigner | null;
   readonly spentThisPeriod: bigint;
+  readonly executeConfidentialPayment?: GraphActionContext["executeConfidentialPayment"];
+  readonly paymentRecipient?: string;
 }
 
 /**
@@ -47,6 +53,8 @@ export async function executeAgentGraphTool(
     agentSigner: params.agentSigner,
     spentThisPeriod: params.spentThisPeriod,
     ownerGoal: params.ownerGoal,
+    executeConfidentialPayment: params.executeConfidentialPayment,
+    paymentRecipient: params.paymentRecipient,
   }).find((candidate) => candidate.name === params.call.name);
 
   if (!action) {

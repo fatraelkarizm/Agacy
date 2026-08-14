@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createVercelAITools, type Action } from "solana-agent-kit";
 import {
   createAgacyGraphPlugin,
@@ -27,6 +27,7 @@ const context = {
   spentThisPeriod: 4_000_000n,
   ownerGoal: "Inspect my wallet.",
 };
+const VENDOR = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 
 const actions = createGraphActions(context);
 
@@ -127,10 +128,10 @@ describe("graph action handlers", () => {
     });
 
     expect(result["status"]).toBe("blocked");
-    expect(String(result["summary"])).toContain("must explicitly authorize 5 demo tokens");
+    expect(String(result["summary"])).toContain("must explicitly authorize 5 tokens");
   });
 
-  it("blocks an amount when the owner did not approve the provisioned demo recipient", async () => {
+  it("blocks an amount when the owner did not approve the imported vendor", async () => {
     const payment = createGraphActions({
       ...context,
       ownerGoal: "Pay the vendor 2 tokens confidentially.",
@@ -141,7 +142,30 @@ describe("graph action handlers", () => {
     });
 
     expect(result["status"]).toBe("blocked");
-    expect(String(result["summary"])).toContain("provisioned demo recipient");
+    expect(String(result["summary"])).toContain("imported vendor wallet");
+  });
+
+  it("executes only when amount and imported vendor both match the owner goal", async () => {
+    const execute = vi.fn(async () => ({
+      mode: "confidential" as const,
+      signature: "signature",
+      mint: VENDOR,
+      recipient: VENDOR,
+      amountTokens: 2,
+      amountReadableOnChain: false,
+      elapsedMs: 100,
+      explorerUrl: "https://explorer.solana.com",
+    }));
+    const payment = createGraphActions({
+      ...context,
+      ownerGoal: `Pay ${VENDOR} exactly 2 tokens confidentially.`,
+      paymentRecipient: VENDOR,
+      executeConfidentialPayment: execute,
+    }).find((action) => action.name === "pay_confidentially");
+
+    const result = await payment!.handler(undefined as never, { amountTokens: 2 });
+    expect(result["status"]).toBe("succeeded");
+    expect(execute).toHaveBeenCalledWith(2, "confidential");
   });
 
   it("only recognizes token-adjacent amounts as payment authority", () => {

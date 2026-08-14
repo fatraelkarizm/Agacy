@@ -9,6 +9,7 @@ const tools = [
   "pay_confidentially",
   "get_swap_quote",
 ] as const;
+const VENDOR = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
 
 describe("agent graph conversation", () => {
   it("answers a greeting once without inventing work", async () => {
@@ -59,11 +60,11 @@ describe("agent graph conversation", () => {
     expect(result.children).toEqual([expect.objectContaining({
       label: "Clarification needed",
       kind: "blocked",
-      detail: expect.stringContaining("not an arbitrary vendor wallet"),
+      detail: expect.stringContaining("onboarded vendor wallet address"),
     })]);
   });
 
-  it("asks before substituting the provisioned demo recipient for a vendor", async () => {
+  it("asks for the exact onboarded vendor instead of guessing a recipient", async () => {
     const result = await expandAgentGraph({
       goal: "Pay the vendor 2 tokens confidentially.",
       parent: { label: "Pay vendor", detail: "Pay vendor", kind: "agent" },
@@ -75,7 +76,7 @@ describe("agent graph conversation", () => {
     expect(result.children[0]).toMatchObject({
       label: "Clarification needed",
       kind: "blocked",
-      detail: expect.stringContaining("Should I use the provisioned demo recipient"),
+      detail: expect.stringContaining("Which onboarded vendor wallet"),
     });
   });
 
@@ -130,7 +131,8 @@ describe("agent graph conversation", () => {
     ["Hi", []],
     ["Check my wallet overview.", ["get_wallet_overview"]],
     ["Research whether the vendor reported a breach.", ["research_counterparty"]],
-    ["Pay the provisioned demo recipient for the approved 2-token invoice confidentially.", ["pay_confidentially"]],
+    [`Pay onboarded vendor wallet ${VENDOR} 2 tokens confidentially.`, ["pay_confidentially"]],
+    [`Pay ${VENDOR} for the approved 2-token invoice confidentially.`, ["pay_confidentially"]],
     [
       "Verify the price using two independent sources, then settle the invoice.",
       ["get_token_price", "cross_check_token_price", "pay_confidentially"],

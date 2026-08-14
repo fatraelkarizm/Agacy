@@ -12,7 +12,8 @@ import { toPolicyInitParams } from "./agent-setup";
 import type { AgentDraftDTO } from "../dto/agent.dto";
 import type { WalletConnectionDTO } from "../dto/wallet.dto";
 
-export const AGENT_SESSION_FEE_BUDGET_LAMPORTS = 5_000_000n;
+// Proof context accounts need temporary rent before cleanup returns it.
+export const AGENT_SESSION_FEE_BUDGET_LAMPORTS = 50_000_000n;
 
 /**
  * Turns an onboarding draft into a real on-chain policy account, signed by

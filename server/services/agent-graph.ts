@@ -41,7 +41,8 @@ export function relevantToolsForGoal(
   availableTools: readonly AgentGraphToolName[],
 ): AgentGraphToolName[] {
   const text = goal.toLowerCase();
-  const wallet = /\b(wallet|balance|treasury|funds?|holdings?|runway|can cover)\b/.test(text);
+  const wallet = /\b(wallet overview|balance|treasury|funds?|holdings?|runway|can cover)\b/.test(text) ||
+    /\b(?:my|owner|connected|operations?)\s+wallet\b/.test(text);
   const price = /\b(price|pricing|rate|quote|swap|buy|convert)\b/.test(text);
   const crossCheck = /\b(cross[ -]?check|independent|two sources?|second source)\b/.test(text);
   const research = /\b(research|search|incident|breach|outage|counterparty|vendor status|risk)\b/.test(text);
@@ -106,7 +107,7 @@ export async function expandAgentGraph(
     return {
       children: [{
         label: "Available capabilities",
-        detail: "I can inspect the connected wallet and on-chain policy, check and cross-check token prices, research counterparties, quote swaps, and execute a devnet confidential payment to the provisioned demo recipient after the owner supplies an explicit token amount.",
+        detail: "I can inspect the connected wallet and on-chain policy, check and cross-check token prices, research counterparties, quote swaps, and execute a devnet confidential payment after the owner supplies an explicit token amount and an onboarded vendor wallet.",
         kind: "complete",
         expand: false,
       }],
@@ -136,18 +137,18 @@ export async function expandAgentGraph(
         children: [{
           label: "Clarification needed",
           detail: amountTokens === null
-            ? "How many demo tokens should I pay? This browser demo can only use its provisioned confidential recipient, not an arbitrary vendor wallet. Confirm that recipient and include an amount greater than 0 and no more than 5 tokens."
+            ? "How many tokens should I pay? Include an explicit amount greater than 0 and no more than 5 tokens, plus the onboarded vendor wallet address."
             : "This devnet demo can move more than 0 and at most 5 tokens. What valid amount should I use?",
           kind: "blocked",
           expand: false,
         }],
       };
     }
-    if (!goalAuthorizesDemoRecipient(input.goal)) {
+    if (!findRecipientAddress(input.goal)) {
       return {
         children: [{
           label: "Clarification needed",
-          detail: `This browser demo cannot pay an arbitrary vendor wallet because a confidential recipient account and keys must be provisioned first. Should I use the provisioned demo recipient for this ${amountTokens}-token demonstration?`,
+          detail: `Which onboarded vendor wallet should receive this ${amountTokens}-token payment? Include its full Solana address; I will not guess or substitute a recipient.`,
           kind: "blocked",
           expand: false,
         }],
@@ -261,8 +262,8 @@ export async function expandAgentGraph(
   }
 }
 
-function goalAuthorizesDemoRecipient(goal: string): boolean {
-  return /\b(?:provisioned|demo)\b.*\b(?:recipient|vendor|wallet)\b/i.test(goal);
+function findRecipientAddress(goal: string): string | null {
+  return goal.match(/\b[1-9A-HJ-NP-Za-km-z]{32,44}\b/)?.[0] ?? null;
 }
 
 function recoverExpansion(

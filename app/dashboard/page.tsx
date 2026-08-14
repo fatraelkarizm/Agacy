@@ -16,6 +16,7 @@ import type { DashboardSection } from "../../server/dto/dashboard.dto";
 import { toPublicView } from "../../server/dto/transaction.dto";
 import type { WalletConnectionDTO } from "../../server/dto/wallet.dto";
 import type { ProvisionedPolicyDTO } from "../../server/dto/session.dto";
+import type { RealTreasuryDTO, VendorPaymentProfileDTO } from "../../server/dto/real-payment.dto";
 import {
   buildAttackSimulation,
   buildAuthorizedDemoHistory,
@@ -26,6 +27,7 @@ import {
 import { AgentSetup } from "../AgentSetup";
 import { AgentExecutionGraph } from "../AgentExecutionGraph";
 import { AgentGraphArena } from "../AgentGraphArena";
+import { RealPaymentSetup } from "../RealPaymentSetup";
 import { Dashboard } from "../Dashboard";
 import { PURPOSE_PRESETS, toSpendPolicy } from "../../server/services/agent-setup";
 import { provisionAgentPolicy } from "../../server/services/agent-provisioning";
@@ -57,6 +59,12 @@ import {
   loadDashboardSession,
   saveDashboardSession,
 } from "../../server/services/session-state";
+import {
+  createRealTreasury,
+  executeRealPayment,
+  parseVendorPaymentProfile,
+  recoverRealTreasury,
+} from "../../server/services/real-payment";
 
 const devnetClient = createDevnetClient();
 const DASHBOARD_SECTIONS: readonly DashboardSection[] = [
@@ -181,6 +189,10 @@ export default function DashboardPage() {
   const [custodyHolder, setCustodyHolder] = useState<string | null>(null);
   const [custodyBusy, setCustodyBusy] = useState(false);
   const [custodyError, setCustodyError] = useState<string | null>(null);
+  const [realTreasury, setRealTreasury] = useState<RealTreasuryDTO | null>(null);
+  const [vendorProfile, setVendorProfile] = useState<VendorPaymentProfileDTO | null>(null);
+  const [realPaymentBusy, setRealPaymentBusy] = useState(false);
+  const [realPaymentError, setRealPaymentError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setRunError(null);
@@ -219,6 +231,8 @@ export default function DashboardPage() {
           setPolicy(session.policy);
           setExecuted([...session.executed]);
           setProvisionedPolicy(session.provisionedPolicy);
+          setRealTreasury(session.realTreasury ?? null);
+          setVendorProfile(session.vendorProfile ?? null);
         }
         setHydrated(true);
       })
@@ -269,6 +283,8 @@ export default function DashboardPage() {
       policy,
       executed,
       provisionedPolicy,
+      realTreasury,
+      vendorProfile,
     });
   }, [
     agent,
@@ -279,7 +295,9 @@ export default function DashboardPage() {
     ownerWallet,
     policy,
     provisionedPolicy,
+    realTreasury,
     setupDraft,
+    vendorProfile,
   ]);
 
   // Once a policy account exists on devnet, the agent detail should show
@@ -487,6 +505,66 @@ export default function DashboardPage() {
     [custodyAccount, ownerWallet, provisionedPolicy],
   );
 
+  const createTreasury = useCallback(async (initialTokens: number) => {
+    if (!ownerWallet || !provisionedPolicy) return;
+    setRealPaymentBusy(true);
+    setRealPaymentError(null);
+    try {
+      setRealTreasury(await createRealTreasury({
+        client: devnetClient,
+        ownerWallet,
+        policyAccount: provisionedPolicy.policyAccount,
+        initialTokens,
+      }));
+      setVendorProfile(null);
+    } catch (error) {
+      setRealPaymentError(error instanceof Error ? error.message : "Real treasury setup failed.");
+    } finally {
+      setRealPaymentBusy(false);
+    }
+  }, [ownerWallet, provisionedPolicy]);
+
+  const importVendor = useCallback((encoded: string) => {
+    setRealPaymentError(null);
+    try {
+      const profile = parseVendorPaymentProfile(encoded);
+      if (!realTreasury || profile.mint !== realTreasury.mint) {
+        throw new Error("This vendor profile was provisioned for a different mint.");
+      }
+      setVendorProfile(profile);
+    } catch (error) {
+      setRealPaymentError(error instanceof Error ? error.message : "Vendor profile is invalid.");
+    }
+  }, [realTreasury]);
+
+  const recoverTreasury = useCallback(async () => {
+    if (!ownerWallet || !realTreasury) return;
+    setRealPaymentBusy(true);
+    setRealPaymentError(null);
+    try {
+      await recoverRealTreasury({ client: devnetClient, ownerWallet, treasury: realTreasury });
+      setRealTreasury(null);
+      setVendorProfile(null);
+    } catch (error) {
+      setRealPaymentError(error instanceof Error ? error.message : "Treasury recovery failed.");
+    } finally {
+      setRealPaymentBusy(false);
+    }
+  }, [ownerWallet, realTreasury]);
+
+  const payRealVendor = useCallback(async (amountTokens: number, mode: "confidential" | "public") => {
+    const agentSigner = agentSignerRef.current;
+    if (mode !== "confidential") throw new Error("The real treasury is confidential-only.");
+    if (!agentSigner || !vendorProfile) throw new Error("Real payment setup is incomplete.");
+    const receipt = await executeRealPayment({
+      client: devnetClient,
+      agent: agentSigner,
+      profile: vendorProfile,
+      amountTokens,
+    });
+    return { ...receipt, mode, amountTokens };
+  }, [vendorProfile]);
+
   const runGraphTool = useCallback(
     (call: AgentGraphToolCallDTO, ownerGoal: string) => executeAgentGraphTool({
       call,
@@ -497,8 +575,16 @@ export default function DashboardPage() {
       policyAccount: provisionedPolicy?.policyAccount ?? null,
       agentSigner: agentSignerRef.current,
       spentThisPeriod: executed.reduce((sum, item) => sum + item.amount, 0n),
+      executeConfidentialPayment:
+        realTreasury
+          && vendorProfile
+          && agentSignerRef.current
+          && provisionedPolicy?.policyAccount === realTreasury.policyAccount
+          ? payRealVendor
+          : undefined,
+      paymentRecipient: vendorProfile?.walletAddress,
     }),
-    [executed, ownerWallet, policy, provisionedPolicy],
+    [executed, ownerWallet, payRealVendor, policy, provisionedPolicy, realTreasury, vendorProfile],
   );
 
   if (checkingSession || !ownerWallet) {
@@ -512,14 +598,21 @@ export default function DashboardPage() {
   // The graph renders inside the dashboard shell rather than as a full-screen
   // takeover, so the owner keeps the sidebar, the wallet chip, and a way out
   // that is not a keyboard shortcut.
+  const agentSessionActive = Boolean(agentSignerRef.current && provisionedPolicy);
+  const realPaymentSessionActive = Boolean(
+    agentSessionActive
+      && realTreasury
+      && provisionedPolicy?.policyAccount === realTreasury.policyAccount,
+  );
+  const realPaymentReady = realPaymentSessionActive && Boolean(vendorProfile);
   const availableTools: AgentGraphToolName[] = [
     "get_wallet_overview",
     "get_token_price",
     "cross_check_token_price",
     "research_counterparty",
-    "pay_confidentially",
     "get_swap_quote",
   ];
+  if (realPaymentReady) availableTools.push("pay_confidentially");
   if (provisionedPolicy) availableTools.push("check_on_chain_policy");
   if (policy && provisionedPolicy && agentSignerRef.current) {
     availableTools.push("authorize_policy_spend");
@@ -559,13 +652,27 @@ export default function DashboardPage() {
       onLanding={() => router.push("/")}
     >
       {dashboardSection === "graph" && graphAgentSelected && agent ? (
-        <AgentGraphArena
-          agentPurpose={agent.purpose}
-          availableTools={availableTools}
-          onToolCall={runGraphTool}
-          persistenceKey={`${ownerWallet.address}.${agent.name}`}
-          onExit={() => navigateDashboard("overview")}
-        />
+        <>
+          <RealPaymentSetup
+            treasury={realTreasury}
+            vendor={vendorProfile}
+            busy={realPaymentBusy}
+            error={realPaymentError}
+            ready={realPaymentReady}
+            agentReady={agentSessionActive}
+            sessionActive={realPaymentSessionActive}
+            onCreateTreasury={(amount) => void createTreasury(amount)}
+            onImportVendor={importVendor}
+            onRecoverTreasury={() => void recoverTreasury()}
+          />
+          <AgentGraphArena
+            agentPurpose={agent.purpose}
+            availableTools={availableTools}
+            onToolCall={runGraphTool}
+            persistenceKey={`${ownerWallet.address}.${agent.name}`}
+            onExit={() => navigateDashboard("overview")}
+          />
+        </>
       ) : dashboardSection === "onboarding" ? (
         <AgentSetup
           draft={setupDraft}

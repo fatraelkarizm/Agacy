@@ -13,6 +13,10 @@ export interface WalletSignAndSendResult {
   readonly signature: string;
 }
 
+export interface WalletSignMessageResult {
+  readonly signature: Uint8Array;
+}
+
 /**
  * Structurally, not nominally, a `@solana/web3.js` `VersionedTransaction` —
  * this project does not import web3.js types into its own type layer, only
@@ -38,6 +42,10 @@ export interface InjectedWalletProvider {
   signAndSendTransaction?(
     transaction: InjectedWalletTransaction,
   ): Promise<WalletSignAndSendResult>;
+  signMessage?(
+    message: Uint8Array,
+    display?: "utf8" | "hex",
+  ): Promise<WalletSignMessageResult | Uint8Array>;
 }
 
 export interface InjectedWalletRegistry {

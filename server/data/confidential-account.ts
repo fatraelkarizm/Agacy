@@ -2,6 +2,7 @@ import {
   generateKeyPairSigner,
   type Address,
   type KeyPairSigner,
+  type TransactionSigner,
 } from "@solana/kit";
 import { getCreateAccountInstruction } from "@solana-program/system";
 import {
@@ -14,6 +15,7 @@ import {
 import { PubkeyValidityProofData } from "@solana/zk-sdk/node";
 import { verifyPubkeyValidity } from "@solana-program/zk-elgamal-proof";
 import type { SolanaClient } from "./solana-client.js";
+import { sendInstructionsWithSigner } from "./solana-client.js";
 import { sendInstructions } from "./confidential-mint.js";
 import type { ConfidentialKeys } from "./confidential-keys.js";
 
@@ -113,5 +115,44 @@ export async function createConfidentialTokenAccount(
     ...proofInstructions,
   ]);
 
+  return { tokenAccount: tokenSigner.address, signature };
+}
+
+export async function createConfidentialTokenAccountWithSigner(
+  client: SolanaClient,
+  payer: TransactionSigner,
+  owner: TransactionSigner,
+  mint: Address,
+  keys: ConfidentialKeys,
+): Promise<ConfidentialAccountSetup> {
+  const tokenSigner = await generateKeyPairSigner();
+  const space = BigInt(getTokenSize([confidentialAccountSizingTemplate()]));
+  const rent = await client.rpc.getMinimumBalanceForRentExemption(space).send();
+  const validityProof = new PubkeyValidityProofData(keys.elGamal);
+  const proofInstructions = await verifyPubkeyValidity({
+    rpc: client.rpc,
+    payer,
+    proofData: validityProof.toBytes(),
+  });
+
+  const signature = await sendInstructionsWithSigner(client, payer, [
+    getCreateAccountInstruction({
+      payer,
+      newAccount: tokenSigner,
+      lamports: rent,
+      space,
+      programAddress: TOKEN_2022_PROGRAM_ADDRESS,
+    }),
+    getInitializeAccount3Instruction({ account: tokenSigner.address, mint, owner: owner.address }),
+    getConfigureConfidentialTransferAccountInstruction({
+      token: tokenSigner.address,
+      mint,
+      authority: owner,
+      decryptableZeroBalance: keys.ae.encrypt(0n).toBytes() as never,
+      maximumPendingBalanceCreditCounter: DEFAULT_MAX_PENDING_CREDITS,
+      proofInstructionOffset: PROOF_INSTRUCTION_OFFSET,
+    }),
+    ...proofInstructions,
+  ]);
   return { tokenAccount: tokenSigner.address, signature };
 }

@@ -12,7 +12,7 @@ import { runAgentOnChain } from "../server/services/agent-run";
 import { evaluateSpendPolicy, fetchOnChainPolicyStatus } from "../server/services/spend-policy";
 import { fetchTokenPrice, fetchSwapQuote } from "./effects/jupiter";
 import { fetchAisaResearch, fetchAisaTokenPrice, priceDivergencePercent } from "./effects/aisa";
-import { payConfidentially } from "./effects/confidential-payment";
+import type { ConfidentialPaymentReceipt, PaymentMode } from "./effects/confidential-payment";
 
 /**
  * The Agent Graph's toolset, expressed as Solana Agent Kit `Action` objects.
@@ -58,6 +58,12 @@ export interface GraphActionContext {
    * and recipient against it, so the model cannot introduce either value.
    */
   readonly ownerGoal: string;
+  /** Supplied by the owner session only after real treasury and vendor setup. */
+  readonly executeConfidentialPayment?: (
+    amountTokens: number,
+    mode: PaymentMode,
+  ) => Promise<ConfidentialPaymentReceipt>;
+  readonly paymentRecipient?: string;
 }
 
 export const emptyInputSchema = z.object({});
@@ -128,7 +134,7 @@ export const GRAPH_ACTION_DESCRIPTIONS: Record<AgentGraphToolName, string> = {
   cross_check_token_price:
     "Independently re-price a token through AIsa (CoinGecko aggregate) and compare it against the Jupiter figure, reporting how far apart the two sources are. Input: mint. Read-only. Use this before acting on a price, not instead of get_token_price.",
   pay_confidentially:
-    "Execute a real Token-2022 confidential transfer on Solana devnet and verify the amount is not readable on-chain afterwards. Input: amountTokens (max 5). This moves tokens on a demo mint held by the server, not the owner's funds — use it to demonstrate that an amount becomes ciphertext, not to settle a real invoice.",
+    "Execute a real policy-gated Token-2022 confidential transfer from the connected owner's devnet treasury to an onboarded vendor profile, then verify the amount is not readable on-chain. Input: amountTokens (max 5). Requires owner treasury and vendor setup.",
   research_counterparty:
     "Search the open web through AIsa for recent news about a vendor, token, protocol, or counterparty before acting on a payment decision. Input: query (a short search phrase). Read-only. Use it to surface anything an owner would want to know that the chain cannot tell you — an exploit, a rug, a depeg, an outage.",
 };
@@ -407,18 +413,26 @@ async function runConfidentialPayment(
   input: z.infer<typeof confidentialPaymentInputSchema>,
 ): Promise<AuthorizedAgentGraphToolResultDTO> {
   if (!goalAuthorizesTokenAmount(context.ownerGoal, input.amountTokens) ||
-      !goalAuthorizesDemoRecipient(context.ownerGoal)) {
+      !context.paymentRecipient || !context.ownerGoal.includes(context.paymentRecipient)) {
     return {
       tool: "pay_confidentially",
       status: "blocked",
-      summary: `Payment blocked: the owner goal must explicitly authorize ${input.amountTokens} demo tokens and the provisioned demo recipient. Ask the owner; do not infer either choice.`,
-      modelSummary: "The amount or provisioned demo recipient was not explicitly authorized in the owner's goal. Ask the owner; do not guess.",
+      summary: `Payment blocked: the owner goal must explicitly authorize ${input.amountTokens} tokens and the imported vendor wallet. Ask the owner; do not infer either choice.`,
+      modelSummary: "The amount or imported vendor wallet was not explicitly authorized in the owner's goal. Ask the owner; do not guess.",
     };
   }
 
   const mode = input.mode ?? "confidential";
+  if (!context.executeConfidentialPayment) {
+    return {
+      tool: "pay_confidentially",
+      status: "blocked",
+      summary: "Real payment is not ready. Create the owner-funded confidential treasury and import a vendor payment profile first.",
+      modelSummary: "The real treasury or vendor profile is missing. Ask the owner to finish payment setup; do not substitute demo data.",
+    };
+  }
   try {
-    const receipt = await payConfidentially(input.amountTokens, mode);
+    const receipt = await context.executeConfidentialPayment(input.amountTokens, mode);
 
     // In confidential mode a readable amount is a failed privacy claim, not a
     // successful payment. In public mode a readable amount is the entire point,
@@ -661,10 +675,6 @@ function mentionsAmount(goal: string, amount: number): boolean {
 export function goalAuthorizesTokenAmount(goal: string, amount: number): boolean {
   return [...goal.matchAll(/\b(\d+(?:[.,]\d+)?)\s*(?:-\s*)?tokens?\b/gi)].some((match) =>
     Math.abs(Number(match[1]?.replace(",", ".")) - amount) < Number.EPSILON);
-}
-
-function goalAuthorizesDemoRecipient(goal: string): boolean {
-  return /\b(?:provisioned|demo)\b.*\b(?:recipient|vendor|wallet)\b/i.test(goal);
 }
 
 function blocked(

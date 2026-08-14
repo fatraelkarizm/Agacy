@@ -1,5 +1,6 @@
 import type { AgentDraftDTO, AgentExecutionDTO, AgentOnboardingStep, SpendPolicyDTO } from "./agent.dto";
 import type { DashboardSection } from "./dashboard.dto";
+import type { RealTreasuryDTO, VendorPaymentProfileDTO } from "./real-payment.dto";
 
 /**
  * What survives a page refresh while the owner stays on the same wallet.
@@ -30,4 +31,7 @@ export interface DashboardSessionDTO {
   readonly policy: SpendPolicyDTO | null;
   readonly executed: readonly AgentExecutionDTO[];
   readonly provisionedPolicy: ProvisionedPolicyDTO | null;
+  /** Public on-chain references only. Confidential keys and the agent signer stay memory-only. */
+  readonly realTreasury: RealTreasuryDTO | null;
+  readonly vendorProfile: VendorPaymentProfileDTO | null;
 }

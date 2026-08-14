@@ -32,6 +32,8 @@ function session(overrides: Partial<DashboardSessionDTO> = {}): DashboardSession
     policy: null,
     executed: [],
     provisionedPolicy: null,
+    realTreasury: null,
+    vendorProfile: null,
     ...overrides,
   };
 }

@@ -10,6 +10,7 @@ import type {
   InjectedWalletTransaction,
   WalletSessionStorage,
   WalletSignAndSendResult,
+  WalletSignMessageResult,
 } from "../types/wallet-provider";
 import { isWalletProviderId } from "../schema/wallet.schema";
 
@@ -143,4 +144,17 @@ export async function signAndSendWithInjectedWallet(
     throw new Error(`${providerId} does not support signAndSendTransaction.`);
   }
   return provider.signAndSendTransaction(transaction);
+}
+
+export async function signMessageWithInjectedWallet(
+  providerId: WalletProviderId,
+  message: Uint8Array,
+  registry: InjectedWalletRegistry = browserRegistry(),
+): Promise<Uint8Array> {
+  const provider = injectedWallets(registry)[providerId];
+  if (!provider) throw new Error(`${providerId} extension is not installed.`);
+  if (!provider.signMessage) throw new Error(`${providerId} does not support signMessage.`);
+
+  const result: WalletSignMessageResult | Uint8Array = await provider.signMessage(message, "utf8");
+  return result instanceof Uint8Array ? result : result.signature;
 }

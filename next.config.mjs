@@ -1,3 +1,7 @@
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+
 /** @type {import('next').NextConfig} */
 export default {
   /*
@@ -12,7 +16,7 @@ export default {
     from CLI scripts before now.
   */
   serverExternalPackages: ["@solana/zk-sdk"],
-  webpack: (config) => {
+  webpack: (config, { isServer }) => {
     /*
       `server/data/*.ts` imports its siblings with explicit `.js` extensions,
       which is what Node's ESM resolver requires for the tsx-run scripts and
@@ -29,6 +33,10 @@ export default {
       ".js": [".ts", ".tsx", ".js"],
       ".mjs": [".mts", ".mjs"],
     };
+    if (!isServer) {
+      config.resolve.alias["@solana/zk-sdk/node"] = require.resolve("@solana/zk-sdk/bundler");
+      config.experiments.asyncWebAssembly = true;
+    }
     return config;
   },
 };

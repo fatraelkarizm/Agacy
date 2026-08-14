@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-08-14T08:13:53.300Z",
+  "capturedAt": "2026-08-14T11:41:48.365Z",
   "note": "Multi-round planning audit with synthetic redacted tool observations. It verifies goal alignment and sequencing, not tool execution; browser/devnet runs prove execution.",
   "model": "gpt-4o-mini",
   "availableTools": [
@@ -14,9 +14,9 @@
     {
       "id": "dao-treasury",
       "persona": "DAO treasury operator",
-      "goal": "Proposal AGP-27 passed and the contributor milestone was accepted. Demonstrate the approved payout by executing a 2-token confidential payment to the provisioned demo recipient. Prove the amount is hidden, and do not claim to pay the real contributor.",
+      "goal": "Proposal AGP-27 passed and the contributor milestone was accepted. Execute the approved 2-token confidential payment to onboarded contributor wallet 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM. Prove the amount is hidden.",
       "agentPurpose": "custom",
-      "planningMs": 2175,
+      "planningMs": 2350,
       "toolsChosen": [
         "pay_confidentially"
       ],
@@ -50,9 +50,9 @@
     {
       "id": "sme-procurement",
       "persona": "Startup / SME procurement",
-      "goal": "Our monthly Solana RPC vendor invoice has been approved for a privacy demonstration. Check for any recent vendor outage or security incident, then execute a 1-token confidential payment to the provisioned demo recipient. The run is not complete until that payment settles, and it must not claim to pay the real vendor.",
+      "goal": "Our monthly Solana RPC vendor invoice has been approved. Check for any recent vendor outage or security incident, then execute a 1-token confidential payment to onboarded vendor wallet 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM. The run is not complete until that payment settles.",
       "agentPurpose": "procurement",
-      "planningMs": 3842,
+      "planningMs": 7217,
       "toolsChosen": [
         "research_counterparty",
         "pay_confidentially"
@@ -73,7 +73,7 @@
           "toolCall": {
             "name": "research_counterparty",
             "input": {
-              "query": "recent Solana RPC vendor outage or security incident"
+              "query": "Solana RPC vendor outage or security incident"
             }
           }
         },
@@ -100,9 +100,9 @@
     {
       "id": "protocol-keeper",
       "persona": "Web3 protocol / agent platform",
-      "goal": "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Demonstrate the approved reward by executing a 1-token confidential payment to the provisioned demo recipient. Prove the amount is hidden, and do not claim to pay the real operator.",
+      "goal": "Pay onboarded operator wallet 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM exactly 1 token confidentially for the approved keeper reward, then report the on-chain privacy verification.",
       "agentPurpose": "custom",
-      "planningMs": 1182,
+      "planningMs": 2179,
       "toolsChosen": [
         "pay_confidentially"
       ],
@@ -115,7 +115,7 @@
       "steps": [
         {
           "round": 1,
-          "label": "Execute confidential payment",
+          "label": "Pay confidentially",
           "kind": "tool",
           "expand": false,
           "toolCall": {
@@ -136,9 +136,9 @@
     {
       "id": "individual",
       "persona": "Individual power user",
-      "goal": "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check whether the provider has reported a recent breach or outage that should stop renewal, then execute a 1-token confidential payment to the provisioned demo recipient without claiming to pay the real provider.",
+      "goal": "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check whether the provider has reported a recent breach or outage that should stop renewal, then execute a 1-token confidential payment to onboarded provider wallet 9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM.",
       "agentPurpose": "subscriptions",
-      "planningMs": 3247,
+      "planningMs": 4776,
       "toolsChosen": [
         "research_counterparty",
         "pay_confidentially"
@@ -153,13 +153,13 @@
       "steps": [
         {
           "round": 1,
-          "label": "Check for breaches or outages",
+          "label": "Check for provider breaches or outages",
           "kind": "tool",
           "expand": false,
           "toolCall": {
             "name": "research_counterparty",
             "input": {
-              "query": "market-data provider breach or outage"
+              "query": "recent breaches or outages of market-data provider"
             }
           }
         },

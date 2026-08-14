@@ -72,7 +72,7 @@ export interface AuthorizedAgentGraphToolResultDTO {
 }
 
 export interface PaymentAccountingDTO {
-  readonly asset: "demo token";
+  readonly asset: "demo token" | "owner-created devnet token";
   /** Base units are strings so the API boundary never serializes bigint. */
   readonly tokenBalanceBefore: string;
   readonly amountSpent: string;
