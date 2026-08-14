@@ -71,6 +71,20 @@ combines the controls that a production agent wallet needs in one execution path
 The result is not another chatbot or wallet dashboard. Agacy is the **privacy and authority layer
 between an AI agent's decisions and the owner's funds**.
 
+### Privacy as an adoption layer
+
+Blockchain transparency makes settlement verifiable, but public-by-default financial data is an
+adoption barrier for users and businesses that cannot expose balances, supplier pricing, treasury
+runway, or operating cadence. Agacy treats privacy as product infrastructure: owners gain the
+confidentiality they already expect from financial software while retaining on-chain verification,
+bounded authority, and an auditable recovery path.
+
+That makes privacy more than a security gimmick. It reduces the trust cost of moving real workflows
+on-chain: a user can delegate value without publishing a permanent financial profile, and a business
+can automate payments without turning its operations into competitive intelligence. The current
+prototype provides **confidentiality**, not full anonymity—transaction existence, timing, fees,
+program interaction, and some address linkability remain public.
+
 ### Key features
 
 - 🕸️ **Live autonomous execution graph** — one owner command becomes a recursive graph of model-
@@ -253,8 +267,37 @@ flowchart TD
 | Confidentiality | Token-2022 Confidential Transfer, `@solana/zk-sdk`, ZK ElGamal Proof program | Encrypt amounts/balances and verify transfer proofs |
 | Policy | Rust + Anchor program with PDA-owned custody | Enforce spend limits and restrict the signing path |
 | Agent | Solana Agent Kit, Vercel AI SDK, OpenAI-compatible model | Goal-driven tool selection and recursive graph expansion |
+| AI infrastructure | AISA API gateway (CoinGecko and Tavily services) | Independent market-data cross-checks and counterparty research before consequential actions |
 | Application | Next.js 15, React 19, TypeScript, `@solana/kit` | Owner onboarding, public/authorized views, and graph UI |
 | Audit encryption | AES-GCM via Web Crypto + SPL Memo | Store reasoning ciphertext for owner-authorized review |
+
+### AISA Integration
+
+Agacy uses **[AISA (AIPay Inc.)](https://aisa.one) as a sponsor integration and external AI/data infrastructure layer**,
+not as a decorative badge. The Agent Graph can call AISA-backed services for two verified tools:
+
+- `cross_check_token_price` independently compares AISA/CoinGecko market data with Jupiter before
+  the agent relies on a price.
+- `research_counterparty` uses AISA/Tavily open-web search to check vendors, protocols, or tokens
+  for recent exploits, outages, depegs, or other risks that on-chain state alone cannot reveal.
+
+AISA credentials remain behind server-side proxy routes, so the browser and model never receive the
+secret key. Each completed call is attributed in the execution graph with an orange AISA node and
+included in the run's sponsor-call count, latency, and cost evidence.
+
+### State-of-the-art foundations
+
+Agacy does not claim to invent new cryptography. It composes current state-of-the-art, protocol-level
+privacy primitives into an agent-specific product boundary, then adds policy-enforced custody,
+goal-driven execution, typed public/authorized views, and owner recovery around them.
+
+| Reference | How Agacy uses it |
+|---|---|
+| [Solana Privacy](https://solana.com/privacy) | Frames privacy as a spectrum and distinguishes confidential data from anonymous identities. |
+| [Token-2022 Confidential Transfer](https://solana.com/docs/tokens/extensions/confidential-transfer) | Provides encrypted transfer amounts and confidential balances while keeping settlement verifiable. |
+| [Confidential token-account guide](https://solana.com/docs/tokens/extensions/confidential-transfer/create-token-account) | Basis for wallet-derived ElGamal/AES keys, confidential accounts, pending balances, and on-chain proof verification. |
+| [Twisted ElGamal specification](https://spl.solana.com/assets/files/twisted_elgamal-2115c6b1e6c62a2bb4516891b8ae9ee0.pdf) | Cryptographic foundation for encrypted balances and transfer handles. |
+| [Equality-proof specification](https://spl.solana.com/assets/files/equality_proof-c6a1d284e7c945c6fbef90929cf852d7.pdf) | Supports proving ciphertext/commitment consistency without revealing the underlying amount. |
 
 ## ✅ Supporting Materials and Devnet Evidence
 
@@ -304,9 +347,10 @@ cp .env.example .env.local
 # Windows PowerShell: Copy-Item .env.example .env.local
 ```
 
-Set `LLM_API_KEY` in `.env.local`. `BASE_URL` and `LLM_MODEL` let you use another
-OpenAI-compatible endpoint and model. The public Solana devnet endpoints work by default; a private
-RPC is recommended for repeated live verification.
+Set `LLM_API_KEY` and `AISA_SECRET_KEY` in `.env.local`. `BASE_URL` and `LLM_MODEL` let you use
+another OpenAI-compatible endpoint and model. AISA powers the graph's independent price cross-check
+and counterparty research tools. The public Solana devnet endpoints work by default; a private RPC
+is recommended for repeated live verification.
 
 ### 3. Start
 
@@ -320,12 +364,15 @@ Open `http://localhost:3000` and follow this demo path:
 2. Create an agent and choose a purpose such as **Procurement**.
 3. Set the spending policy and choose **Confidential** visibility.
 4. Review and sign the devnet policy-account transaction.
-5. Open **Agent Graph**, click the central **AI Agent** node—or right-click the canvas—and enter a
-   natural-language command.
-6. Watch wallet and policy reads branch, merge into verified observations, and continue to an
-   authorization or refusal.
-7. Use the dashboard's public/owner comparison and attack controls to explain the privacy and
-   enforcement guarantees.
+5. Open **Agent Graph**, select the agent, and create the connected owner's confidential devnet
+   treasury.
+6. Open the vendor-onboarding link in a second wallet profile, create the vendor's confidential
+   account for that exact mint, and import its public payment profile.
+7. Give the agent an exact goal such as `Pay vendor 2 tokens to <vendor wallet>`.
+8. Watch AISA research or cross-check nodes, verified observations, policy enforcement, confidential
+   settlement, fee accounting, and the Explorer signature appear in the graph.
+9. Use the public/owner toggle to show which payment evidence remains public and which values only
+   the authorized owner can decrypt.
 
 ### 4. Verify
 
