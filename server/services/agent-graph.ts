@@ -35,6 +35,31 @@ const NODE_KINDS = new Set([
  */
 const TOOL_DESCRIPTIONS: Record<AgentGraphToolName, string> = GRAPH_ACTION_DESCRIPTIONS;
 
+/** Safety backstop: the model only sees tools the owner's words can justify. */
+export function relevantToolsForGoal(
+  goal: string,
+  availableTools: readonly AgentGraphToolName[],
+): AgentGraphToolName[] {
+  const text = goal.toLowerCase();
+  const wallet = /\b(wallet|balance|treasury|funds?|holdings?|runway|can cover)\b/.test(text);
+  const price = /\b(price|pricing|rate|quote|swap|buy|convert)\b/.test(text);
+  const crossCheck = /\b(cross[ -]?check|independent|two sources?|second source)\b/.test(text);
+  const research = /\b(research|search|incident|breach|outage|counterparty|vendor status|risk)\b/.test(text);
+  const payment = /\b(pay|payment|send|settle|release|renew|renewal|payout|invoice)\b/.test(text);
+  const policy = /\b(policy|budget|limit|allow|allowed|authorize|authorization)\b/.test(text);
+  const quote = /\b(quote|swap|buy|convert)\b/.test(text);
+
+  return availableTools.filter((tool) => {
+    if (tool === "get_wallet_overview") return wallet;
+    if (tool === "get_token_price") return price;
+    if (tool === "cross_check_token_price") return price && crossCheck;
+    if (tool === "research_counterparty") return research;
+    if (tool === "pay_confidentially") return payment;
+    if (tool === "get_swap_quote") return quote;
+    return policy;
+  });
+}
+
 /**
  * Toolkit tools the graph deliberately does not expose, with the reason.
  *
@@ -77,8 +102,25 @@ export async function expandAgentGraph(
     };
   }
 
+  if (
+    input.completedTools?.includes("pay_confidentially") &&
+    input.observations?.some((value) => /confidential.*(?:settled|completed)/i.test(value))
+  ) {
+    return {
+      children: [{
+        label: "Goal complete",
+        detail: "The requested confidential payment settled and its privacy verification passed.",
+        kind: "complete",
+        expand: false,
+      }],
+    };
+  }
+
   const apiKey = process.env["LLM_API_KEY"];
   if (!apiKey) throw new Error("LLM_API_KEY is not configured");
+
+  const relevantTools = relevantToolsForGoal(input.goal, input.availableTools);
+  const purpose = input.agentPurpose ?? "custom";
 
   const openai = createOpenAI({
     apiKey,
@@ -95,9 +137,17 @@ export async function expandAgentGraph(
       abortSignal: AbortSignal.timeout(30_000),
       system: [
         "You expand one node in a generic autonomous-agent execution graph.",
+        `The configured agent purpose is ${purpose}. Use it only to interpret domain language; never invent tasks merely because they are common for that persona.`,
+        "First identify the owner's explicit outcome, required facts, ordering, and stop condition. Every child must be directly required by that goal or by an unavoidable prerequisite.",
+        "Use the minimum next actions. A tool being available is never a reason to call it.",
         "Break the current node into the smallest useful next observations, reasoning steps, tool calls, policy checks, or results.",
         "Return 1-4 children. At most two children may have expand=true.",
         "For greetings, acknowledgements, or other non-actionable conversation, return exactly one complete child and use no tools.",
+        "For vague or consequential goals missing required details, return one blocked child asking for the missing detail; do not invent work to make the graph look busy.",
+        "When verified prerequisites are still pending, request only those tools now. Do not add placeholder reason, refusal, or payment nodes beside them; continue after their observations arrive.",
+        "Never place pay_confidentially in the same response as wallet, price, research, quote, or policy tools. Payment is a later wave after their verified observations.",
+        "If you emit any tool call, emit only tool children in that response. Report completion only after the tool result returns.",
+        "Once verifiedObservations says the confidential payment settled, return exactly one complete child and stop.",
         finalDepth
           ? "This is the final depth. Every child must have expand=false and end as complete, blocked, or a factual result."
           : "Set expand=true only when that child genuinely needs more work.",
@@ -125,6 +175,7 @@ export async function expandAgentGraph(
             ]
           : []),
         "If the goal needs a capability that is not present at all in availableTools, emit a blocked node naming the missing capability.",
+        "availableTools has already been restricted to tools justified by the owner's goal. Do not complain that unrelated tools are absent.",
         "Keep labels short and details factual. Do not expose hidden chain-of-thought; provide concise action summaries only.",
       ].join("\n"),
       prompt: JSON.stringify({
@@ -133,7 +184,7 @@ export async function expandAgentGraph(
         lineage: input.lineage,
         depth: input.depth,
         verifiedObservations: input.observations ?? [],
-        availableTools: input.availableTools.map((name) => ({
+        availableTools: relevantTools.map((name) => ({
           name,
           description: TOOL_DESCRIPTIONS[name],
         })),
@@ -143,12 +194,12 @@ export async function expandAgentGraph(
     return normalizeExpansion(
       toExpansion(result.object.children),
       finalDepth,
-      input.availableTools,
+      relevantTools,
       input.completedTools ?? [],
     );
   } catch (error) {
     if (NoObjectGeneratedError.isInstance(error) && error.text) {
-      const recovered = recoverExpansion(error.text, finalDepth, input.availableTools);
+      const recovered = recoverExpansion(error.text, finalDepth, relevantTools);
       if (recovered) return recovered;
     }
     throw error;
@@ -238,8 +289,20 @@ function normalizeExpansion(
   completedTools: readonly AgentGraphToolName[] = [],
 ): AgentGraphExpansionDTO {
   let expandable = 0;
+  const validToolChildren = expansion.children.filter(
+    (child) =>
+      child.kind === "tool" &&
+      child.toolCall !== undefined &&
+      availableTools.includes(child.toolCall.name),
+  );
+  const prerequisiteTools = validToolChildren.filter(
+    (child) => child.toolCall?.name !== "pay_confidentially",
+  );
+  const children = validToolChildren.length > 0
+    ? prerequisiteTools.length > 0 ? prerequisiteTools : validToolChildren
+    : expansion.children;
   return {
-    children: expansion.children.map((child): AgentGraphChildDTO => {
+    children: children.map((child): AgentGraphChildDTO => {
       if (child.kind === "tool") {
         if (!child.toolCall || !availableTools.includes(child.toolCall.name)) {
           // A tool that already ran is a finished step, not a missing

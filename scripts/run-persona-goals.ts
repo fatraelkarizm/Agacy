@@ -2,6 +2,7 @@ import "../tests/setup-env.js";
 import { writeFileSync } from "node:fs";
 import { expandAgentGraph } from "../server/services/agent-graph.js";
 import type { AgentGraphToolName } from "../server/dto/agent-graph.dto.js";
+import type { AgentPurpose } from "../server/dto/agent.dto.js";
 
 /**
  * Runs one goal per README persona and records what actually happened.
@@ -22,7 +23,9 @@ import type { AgentGraphToolName } from "../server/dto/agent-graph.dto.js";
 interface Persona {
   readonly id: string;
   readonly persona: string;
+  readonly agentPurpose: AgentPurpose;
   readonly goal: string;
+  readonly expectedTools: readonly AgentGraphToolName[];
 }
 
 const AVAILABLE: AgentGraphToolName[] = [
@@ -38,66 +41,142 @@ const PERSONAS: readonly Persona[] = [
   {
     id: "dao-treasury",
     persona: "DAO treasury operator",
+    agentPurpose: "custom",
     goal: "Proposal AGP-27 passed and the contributor milestone was accepted. Confirm the treasury can cover the approved 2-token payout, then release it confidentially so the contributor's compensation and the DAO's runway are not exposed publicly.",
+    expectedTools: ["get_wallet_overview", "pay_confidentially"],
   },
   {
     id: "sme-procurement",
     persona: "Startup / SME procurement",
+    agentPurpose: "procurement",
     goal: "Our monthly Solana RPC vendor invoice has been approved for payment. Verify the SOL reference price at mint So11111111111111111111111111111111111111112 using two independent sources, check for any recent vendor outage or security incident, then settle the 1-token invoice confidentially so competitors cannot infer our supplier rate.",
+    expectedTools: ["get_token_price", "cross_check_token_price", "research_counterparty", "pay_confidentially"],
   },
   {
     id: "protocol-keeper",
     persona: "Web3 protocol / agent platform",
+    agentPurpose: "custom",
     goal: "The protocol's weekly keeper epoch has closed and the operator completed its assigned jobs. Confirm the operations wallet can cover the approved 1-token keeper reward, then settle it confidentially so the protocol does not publish operator compensation or treasury balance.",
+    expectedTools: ["get_wallet_overview", "pay_confidentially"],
   },
   {
     id: "individual",
     persona: "Individual power user",
+    agentPurpose: "subscriptions",
     goal: "My monthly market-data subscription is due for renewal at its usual 1-token rate. Check that my wallet can cover it and whether the provider has reported a recent breach or outage that should stop renewal, then pay confidentially so the subscription amount is not added to my public spending profile.",
+    expectedTools: ["get_wallet_overview", "research_counterparty", "pay_confidentially"],
   },
 ];
+
+const VERIFIED_OBSERVATION: Record<AgentGraphToolName, string> = {
+  get_wallet_overview: "The wallet overview was verified and the requested payment is covered.",
+  check_on_chain_policy: "The on-chain policy was verified.",
+  authorize_policy_spend: "The requested spend was authorized; no payment occurred yet.",
+  get_token_price: "The primary token reference price was verified.",
+  cross_check_token_price: "An independent source confirmed the reference price.",
+  research_counterparty: "No recent incident was found that should block the requested action.",
+  pay_confidentially: "The confidential devnet payment settled and the plaintext amount was absent on-chain.",
+  get_swap_quote: "A read-only swap quote was verified; no swap executed.",
+};
 
 const results = [];
 
 for (const persona of PERSONAS) {
-  const started = Date.now();
-  const expansion = await expandAgentGraph({
-    goal: persona.goal,
-    parent: { label: persona.persona, detail: persona.goal.slice(0, 240), kind: "agent" },
-    depth: 0,
-    lineage: ["AI Agent"],
-    availableTools: AVAILABLE,
-  });
-  const elapsedMs = Date.now() - started;
+  let parent = { label: persona.persona, detail: persona.goal.slice(0, 240), kind: "agent" as const };
+  let depth = 0;
+  let lineage = ["AI Agent"];
+  let elapsedMs = 0;
+  let terminal = false;
+  const observations: string[] = [];
+  const toolsChosen: AgentGraphToolName[] = [];
+  const steps: Array<Record<string, unknown>> = [];
+  const violations: string[] = [];
 
-  const toolsChosen = expansion.children
-    .map((child) => child.toolCall?.name)
-    .filter((name): name is AgentGraphToolName => name !== undefined);
-  const toolCalls = expansion.children.flatMap((child) => child.toolCall ? [child.toolCall] : []);
+  for (let round = 1; round <= 4; round += 1) {
+    const started = Date.now();
+    const expansion = await expandAgentGraph({
+      goal: persona.goal,
+      agentPurpose: persona.agentPurpose,
+      parent,
+      depth,
+      lineage,
+      observations,
+      completedTools: toolsChosen,
+      availableTools: AVAILABLE.filter((tool) => !toolsChosen.includes(tool)),
+    });
+    elapsedMs += Date.now() - started;
+
+    const toolCalls = expansion.children.flatMap((child) => child.toolCall ? [child.toolCall] : []);
+    const expandable = expansion.children.filter((child) => child.expand);
+    for (const child of expansion.children) {
+      steps.push({
+        round,
+        label: child.label,
+        kind: child.kind,
+        expand: child.expand,
+        ...(child.toolCall ? { toolCall: child.toolCall } : {}),
+      });
+      if (child.kind === "blocked") violations.push(`round ${round}: invented block: ${child.label}`);
+    }
+
+    if (toolCalls.length > 0) {
+      if (expandable.length > 0) violations.push(`round ${round}: branched before tool observations`);
+      for (const call of toolCalls) {
+        if (toolsChosen.includes(call.name)) violations.push(`round ${round}: duplicate ${call.name}`);
+        else toolsChosen.push(call.name);
+        observations.push(VERIFIED_OBSERVATION[call.name]);
+      }
+      parent = {
+        label: "Verified observations",
+        detail: observations.slice(-toolCalls.length).join(" ").slice(0, 500),
+        kind: "observe",
+      };
+      depth += 1;
+      lineage = [...lineage, parent.label].slice(-5);
+      continue;
+    }
+
+    if (expandable.length > 0) {
+      if (expandable.length > 1) violations.push(`round ${round}: unnecessary parallel reasoning`);
+      const next = expandable[0]!;
+      parent = { label: next.label, detail: next.detail, kind: next.kind };
+      depth += 1;
+      lineage = [...lineage, next.label].slice(-5);
+      continue;
+    }
+
+    terminal = expansion.children.some((child) => child.kind === "complete" || child.kind === "result");
+    break;
+  }
+
+  for (const expected of persona.expectedTools) {
+    if (!toolsChosen.includes(expected)) violations.push(`missing expected tool: ${expected}`);
+  }
+  for (const actual of toolsChosen) {
+    if (!persona.expectedTools.includes(actual)) violations.push(`unexpected tool: ${actual}`);
+  }
+  if (!terminal) violations.push("did not reach a terminal result within four rounds");
 
   results.push({
     id: persona.id,
     persona: persona.persona,
     goal: persona.goal,
-    firstExpansionMs: elapsedMs,
-    children: expansion.children.length,
+    agentPurpose: persona.agentPurpose,
+    planningMs: elapsedMs,
     toolsChosen,
-    toolCalls,
-    steps: expansion.children.map((child) => ({
-      label: child.label,
-      kind: child.kind,
-      expand: child.expand,
-      ...(child.toolCall ? { toolCall: child.toolCall } : {}),
-    })),
-    labels: expansion.children.map((child) => child.label),
+    expectedTools: persona.expectedTools,
+    terminal,
+    passed: violations.length === 0,
+    violations,
+    steps,
   });
 
-  console.log(`${persona.persona}: ${elapsedMs}ms, ${expansion.children.length} children`);
-  console.log(`  tools: ${toolsChosen.join(", ") || "(none in first expansion)"}`);
-  for (const call of toolCalls) console.log(`  call: ${call.name} ${JSON.stringify(call.input)}`);
-  for (const child of expansion.children) {
-    console.log(`  - [${child.kind}${child.expand ? ", expands" : ""}] ${child.label}`);
+  console.log(`${violations.length === 0 ? "PASS" : "FAIL"} ${persona.persona}: ${elapsedMs}ms`);
+  console.log(`  tools: ${toolsChosen.join(" -> ") || "(none)"}`);
+  for (const step of steps) {
+    console.log(`  R${step["round"]} [${step["kind"]}] ${step["label"]}`);
   }
+  for (const violation of violations) console.log(`  ! ${violation}`);
   console.log();
 }
 
@@ -107,7 +186,7 @@ writeFileSync(
     {
       capturedAt: new Date().toISOString(),
       note:
-        "First-expansion planning only. Tool execution happens in the browser because the handlers call this app's API routes.",
+        "Multi-round planning audit with synthetic redacted tool observations. It verifies goal alignment and sequencing, not tool execution; browser/devnet runs prove execution.",
       model: process.env["LLM_MODEL"] ?? "gpt-4o-mini",
       availableTools: AVAILABLE,
       personas: results,

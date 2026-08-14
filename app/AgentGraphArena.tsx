@@ -26,6 +26,7 @@ import type {
   AgentGraphExpansionDTO,
   AuthorizedAgentGraphToolResultDTO,
 } from "../server/dto/agent-graph.dto";
+import type { AgentPurpose } from "../server/dto/agent.dto";
 import { ExecutionGraphCanvas } from "./ExecutionGraphCanvas";
 import {
   ExecutionLog,
@@ -47,6 +48,7 @@ interface QueueItem {
 }
 
 interface AgentGraphArenaProps {
+  readonly agentPurpose: AgentPurpose;
   readonly onExit: () => void;
   readonly persistenceKey: string;
   readonly availableTools: readonly AgentGraphToolName[];
@@ -66,7 +68,7 @@ interface StoredGraphState {
   readonly paymentMode: "confidential" | "public";
 }
 
-export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenceKey }: AgentGraphArenaProps) {
+export function AgentGraphArena({ agentPurpose, availableTools, onExit, onToolCall, persistenceKey }: AgentGraphArenaProps) {
   const [nodes, setNodes] = useState<ExecutionNode[]>([]);
   const [composerOpen, setComposerOpen] = useState(false);
   const [command, setCommand] = useState("");
@@ -205,6 +207,7 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
             headers: { "content-type": "application/json" },
             body: JSON.stringify({
               goal: ownerGoal,
+              agentPurpose,
               parent: {
                 label: item.node.label,
                 detail: item.node.modelDetail ?? item.node.detail,
@@ -351,7 +354,7 @@ export function AgentGraphArena({ availableTools, onExit, onToolCall, persistenc
         setAnnouncement(queue.length > 0 ? "Agent stopped at its execution limit" : "Agent task graph complete");
       }
     },
-    [availableTools, focusNode, onToolCall, patchNode],
+    [agentPurpose, availableTools, focusNode, onToolCall, patchNode],
   );
 
   const submitCommand = (event: FormEvent) => {

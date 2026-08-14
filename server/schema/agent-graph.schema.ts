@@ -67,6 +67,7 @@ export const agentGraphToolCallSchema = z.discriminatedUnion("name", [
 
 export const agentGraphExpansionRequestSchema = z.object({
   goal: z.string().trim().min(1).max(2_000),
+  agentPurpose: z.enum(["subscriptions", "trading", "procurement", "custom"]).optional(),
   parent: z.object({
     label: z.string().trim().min(1).max(80),
     detail: z.string().trim().min(1).max(500),

@@ -90,6 +90,7 @@ export interface AgentGraphParentDTO {
 
 export interface AgentGraphExpansionRequestDTO {
   readonly goal: string;
+  readonly agentPurpose?: "subscriptions" | "trading" | "procurement" | "custom";
   readonly parent: AgentGraphParentDTO;
   readonly depth: number;
   readonly lineage: readonly string[];

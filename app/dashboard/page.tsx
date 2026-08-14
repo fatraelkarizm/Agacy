@@ -560,6 +560,7 @@ export default function DashboardPage() {
     >
       {dashboardSection === "graph" && graphAgentSelected && agent ? (
         <AgentGraphArena
+          agentPurpose={agent.purpose}
           availableTools={availableTools}
           onToolCall={runGraphTool}
           persistenceKey={`${ownerWallet.address}.${agent.name}`}
